@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - include:
+      file: users/0001-init-user-schema.sql
+      relativeToChangelogFile: true
+  - include:
+      file: users/0002-init-auth-schema.sql
+      relativeToChangelogFile: true
+  - include:
+      file: users/0003-init-users-data.sql
+      relativeToChangelogFile: true

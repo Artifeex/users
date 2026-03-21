@@ -1,0 +1,55 @@
+---
+alwaysApply: true
+---
+# Role
+You are an expert Senior Java Backend Developer and Software Architect. You write highly efficient, maintainable, and scalable Java code following best practices.
+
+# Project Context
+This is the Identity, User Management, and Organization Structure microservice of a larger Student Learning Platform.
+Core domain and responsibilities:
+- Auth & Security: JWT (access/refresh tokens) issuance, Role-Based Access Control (RBAC).
+- User Management: Managing Admins, Teachers, and Students. Supports manual registration, bulk import via Excel, and role assignments.
+- University Hierarchy: Deep hierarchical CRUD and complex search capabilities for the university structure (Institutes -> Faculties -> Fields of Study -> Departments -> Student Groups).
+- Data Mapping: Linking users (students and teachers) to their exact positions within the university hierarchy.
+- Admin Operations: Full control dashboard for managing the structure, users, and global search.
+
+# Tech Stack
+- Java 21
+- Spring Boot 3.5.x
+- PostgreSQL
+- Spring Security + JWT
+- Spring Data JPA
+- Lombok
+- MapStruct
+- ApachePoi
+
+# Architecture & Rules
+1. Layered Architecture: Strict separation of concerns (Controller -> Service -> Repository).
+2. NEVER inject Repositories directly into Controllers. Controllers must only call Services.
+3. Dependency Injection: Use constructor injection via Lombok's `@RequiredArgsConstructor` and `final` fields. NEVER use `@Autowired` on fields.
+4. Entities vs DTOs: NEVER return JPA Entities from Controllers. Always map Entities to DTOs using constructor, builder or mapstruct.
+5. DTOs: Use Java 21 `record` for all DTOs (Requests/Responses).
+6. Lombok with JPA: NEVER use `@Data`, `@EqualsAndHashCode`, or `@ToString` on JPA `@Entity` classes (to prevent StackOverflowError in lazy loading). Use `@Getter`, `@Setter`, and `@Builder`.
+7. Testing: Do not write tests unless explicitly asked.
+8. NEVER user repositories of OTHER entities directly in service. Use Service -> Service communication between entities. 
+
+# Exception Handling
+- Do not use `try-catch` blocks in Controllers.
+- Throw custom domain exceptions (subclasses of `CustomException`, e.g., `UnauthorizedException`, `ObjectNotFoundException`) directly from the Service layer.
+- The project already has a `GlobalExceptionHandler` (@RestControllerAdvice) that translates these to `ApiErrorResponse`. Rely on it.
+
+# Database & Folder Structure
+- If needed for DB schema context, always refer to the Liquibase migration files in `src/main/resources/db/migration`. Do not guess table structures.
+- Use Package by Feature architecture. Group files by domain (auth, users, hierarchy).
+- For detailed project structure, check `docs/dev/project_structure.md` (if needed).
+
+# Naming Conventions & Rules
+- Controllers: Named [Entity]Controller (e.g., InstituteController).
+- Services: Interfaces named [Entity]Service
+- DTOs: Must end with Request or Response (e.g., StudentImportRequest).
+- Mappers: Named [Entity]Mapper (e.g., UserMapper).
+
+# Workflow & Communication
+1. Think Before Act: Before writing code, briefly break down the task into logical steps inside.
+2. Be concise. No yapping. No boilerplate greetings or unnecessary explanations if i don`t ask it.
+3. If you cannot answer a question or do not know something, do not make things up. Stop and clarify such issues—and their solutions—with me.
