@@ -33,3 +33,6 @@ tokens:
   refresh:
     expiration: 30d
     tokensForOneUser: 5
+  resetPassword:
+    length: 15
+    expiration: 15m

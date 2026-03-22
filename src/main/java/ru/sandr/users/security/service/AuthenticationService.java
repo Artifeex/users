@@ -17,6 +17,7 @@ import ru.sandr.users.core.exception.ObjectNotFoundException;
 import ru.sandr.users.security.dto.AuthenticationRequestDto;
 import ru.sandr.users.security.dto.AuthResultDto;
 import ru.sandr.users.security.dto.ForgotPasswordRequestDto;
+import ru.sandr.users.security.dto.ResetPasswordRequestDto;
 import ru.sandr.users.security.entity.RefreshToken;
 import ru.sandr.users.security.repository.RefreshTokenRepository;
 import ru.sandr.users.security.utils.CustomUserDetails;
@@ -41,6 +42,7 @@ public class AuthenticationService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final ResetPasswordTokenService resetPasswordTokenService;
 
     @Value("${tokens.refresh.expiration:30d}")
     private Duration refreshExpiration;
@@ -145,10 +147,12 @@ public class AuthenticationService {
     @Transactional
     public void forgotPassword(ForgotPasswordRequestDto forgotPasswordRequestDto) {
         var userOptional = userRepository.findByEmail(forgotPasswordRequestDto.email().toLowerCase());
-        if (userOptional.isPresent()) {
-            var user = userOptional.get();
-            // Сгенерить токен, сохранить его в БД(в идеале бы в redis с указанием ttl, но пока в БД)
+        // Сгенерить токен, сохранить его в БД(в идеале бы в redis с указанием ttl, но пока в БД)
+        userOptional.ifPresent(resetPasswordTokenService::generateAndSaveResetPasswordTokenForUser);
+    }
 
-        }
+    @Transactional
+    public void resetPassword(ResetPasswordRequestDto requestDto) {
+        resetPasswordTokenService.resetPassword(requestDto);
     }
 }
