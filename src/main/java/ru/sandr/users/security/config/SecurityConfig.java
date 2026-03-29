@@ -58,7 +58,14 @@ public class SecurityConfig {
                    .addFilterBefore(jwtAuthenticationFilter, BasicAuthenticationFilter.class)
                    .authorizeHttpRequests(
                            auth ->
-                                   auth.requestMatchers("/auth/**").permitAll()
+                                   auth.requestMatchers(
+                                                   "/swagger-ui.html",
+                                                   "/swagger-ui/**",
+                                                   "/v3/api-docs",
+                                                   "/v3/api-docs/**"
+                                           )
+                                           .permitAll()
+                                       .requestMatchers("/auth/**").permitAll()
                                        .requestMatchers("/error").permitAll()
                                        .requestMatchers("/admin/**").hasRole("ADMIN")
                                        .requestMatchers("/hierarchy/**").hasRole("ADMIN")

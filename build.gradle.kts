@@ -49,6 +49,9 @@ dependencies {
     // Kafka
     implementation("org.springframework.kafka:spring-kafka")
 
+    // OpenAPI 3 + Swagger UI (https://springdoc.org)
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.9")
+
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.security:spring-security-test")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")

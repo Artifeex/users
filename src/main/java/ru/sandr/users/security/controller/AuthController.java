@@ -14,6 +14,7 @@ import ru.sandr.users.security.dto.AuthenticationResponseDto;
 import ru.sandr.users.security.dto.ForgotPasswordRequestDto;
 import ru.sandr.users.security.dto.ResetPasswordRequestDto;
 import ru.sandr.users.security.service.AuthenticationService;
+import ru.sandr.users.security.service.ResetPasswordTokenService;
 
 import java.time.Duration;
 
@@ -24,6 +25,7 @@ import java.time.Duration;
 public class AuthController {
 
     private final AuthenticationService authenticationService;
+    private final ResetPasswordTokenService resetPasswordTokenService;
 
     @PostMapping("/login")
     public ResponseEntity<AuthenticationResponseDto> login(@Valid @RequestBody AuthenticationRequestDto authenticationRequestDto) {
@@ -62,13 +64,13 @@ public class AuthController {
     @PostMapping("/forgot-password")
     @ResponseStatus(HttpStatus.ACCEPTED)
     public void forgotPassword(ForgotPasswordRequestDto forgotPasswordRequestDto) {
-        authenticationService.forgotPassword(forgotPasswordRequestDto);
+        resetPasswordTokenService.forgotPassword(forgotPasswordRequestDto);
     }
 
     @PostMapping("/reset-password")
     @ResponseStatus(HttpStatus.ACCEPTED)
     public void resetPassword(ResetPasswordRequestDto requestDto) {
-        authenticationService.resetPassword(requestDto);
+        resetPasswordTokenService.resetPassword(requestDto);
     }
 
 }

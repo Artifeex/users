@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import ru.sandr.users.security.dto.ForgotPasswordRequestDto;
 import ru.sandr.users.security.dto.ResetPasswordRequestDto;
 import ru.sandr.users.security.entity.ResetPasswordToken;
 import ru.sandr.users.security.repository.ResetPasswordTokenRepository;
@@ -24,7 +25,6 @@ public class ResetPasswordTokenServiceImpl implements ResetPasswordTokenService 
 
     private final ResetPasswordTokenRepository resetPasswordTokenRepository;
     private final UserRepository userRepository;
-    private final ResetPasswordTokenService resetPasswordTokenService;
     private final PasswordEncoder passwordEncoder;
 
     @Value("${tokens.resetPassword.length:15}")
@@ -62,5 +62,13 @@ public class ResetPasswordTokenServiceImpl implements ResetPasswordTokenService 
         var resetToken = resetPasswordTokenRepository.findByTokenHash(tokenHash).orElseThrow();
         var user = resetToken.getUser();
         user.setPassword(passwordEncoder.encode(requestDto.newPassword()));
+    }
+
+    @Transactional
+    @Override
+    public void forgotPassword(ForgotPasswordRequestDto forgotPasswordRequestDto) {
+        var userOptional = userRepository.findByEmail(forgotPasswordRequestDto.email().toLowerCase());
+        // Сгенерить токен, сохранить его в БД(в идеале бы в redis с указанием ttl, но пока в БД)
+        userOptional.ifPresent(this::generateAndSaveResetPasswordTokenForUser);
     }
 }

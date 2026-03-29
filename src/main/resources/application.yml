@@ -22,6 +22,14 @@ spring:
 
 server:
   port: 8080
+
+# Swagger UI: http://localhost:8080/swagger-ui.html (redirects to /swagger-ui/index.html)
+# OpenAPI JSON: http://localhost:8080/v3/api-docs
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
 tokens:
   jwt:
     secret: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
