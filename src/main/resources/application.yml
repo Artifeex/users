@@ -14,11 +14,15 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc:
+          batch_size: 100
+          order_updates: true # Что делает?
     show-sql: true
 
   liquibase:
     change-log: classpath:db/changelog/users-changelog-master.yml
     enabled: true
+
 
 server:
   port: 8080

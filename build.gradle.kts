@@ -49,6 +49,10 @@ dependencies {
     // Kafka
     implementation("org.springframework.kafka:spring-kafka")
 
+    // shedlock
+    implementation("net.javacrumbs.shedlock:shedlock-spring:6.10.0")
+    implementation("net.javacrumbs.shedlock:shedlock-provider-jdbc-template:6.10.0")
+
     // OpenAPI 3 + Swagger UI (https://springdoc.org)
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.9")
 
