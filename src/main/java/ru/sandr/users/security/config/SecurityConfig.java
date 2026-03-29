@@ -69,6 +69,7 @@ public class SecurityConfig {
                                        .requestMatchers("/error").permitAll()
                                        .requestMatchers("/admin/**").hasRole("ADMIN")
                                        .requestMatchers("/hierarchy/**").hasRole("ADMIN")
+                                       .requestMatchers("/api/v1/import/**").hasRole("ADMIN")
                                        .anyRequest().authenticated()
                    ).exceptionHandling(customizer ->
                         customizer.authenticationEntryPoint(filterChainExceptionHandler)

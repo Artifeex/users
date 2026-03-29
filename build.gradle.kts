@@ -56,6 +56,9 @@ dependencies {
     // OpenAPI 3 + Swagger UI (https://springdoc.org)
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.9")
 
+    // Excel streaming import (SAX/event model — no full-workbook RAM loading)
+    implementation("org.apache.poi:poi-ooxml:5.4.0")
+
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.security:spring-security-test")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")

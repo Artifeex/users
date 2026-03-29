@@ -19,6 +19,8 @@ import ru.sandr.users.hierarchy.repository.FacultyRepository;
 import ru.sandr.users.user.service.TeacherProfileService;
 
 import java.time.LocalDateTime;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -90,6 +92,48 @@ public class DepartmentService {
         }
         departmentRepository.deleteById(id);
     }
+
+    // ── Import helpers ────────────────────────────────────────────────────────
+
+    /**
+     * Returns name → id via scalar projection — no entity objects, no session tracking.
+     * Used by UserImportService to validate and resolve teacher department names.
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Long> findAllAsNameMap() {
+        return departmentRepository.findAllNameIdProjections().stream()
+                .collect(Collectors.toMap(
+                        DepartmentRepository.NameIdProjection::getName,
+                        DepartmentRepository.NameIdProjection::getId,
+                        (a, b) -> a
+                ));
+    }
+
+    /**
+     * Returns "facultyName|deptName" → deptId via scalar projection.
+     * Used by HierarchyImportService for composite-key dedup before Pass 2.
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Long> findAllAsCompositeKeyIdMap() {
+        return departmentRepository.findAllCompositeProjections().stream()
+                .collect(Collectors.toMap(
+                        p -> p.getFacultyName() + "|" + p.getDeptName(),
+                        DepartmentRepository.CompositeProjection::getId,
+                        (a, b) -> a
+                ));
+    }
+
+    /** Returns a Hibernate proxy for FK assignment — no SELECT is issued. */
+    public Department getReference(Long id) {
+        return departmentRepository.getReferenceById(id);
+    }
+
+    @Transactional
+    public Department saveEntity(Department department) {
+        return departmentRepository.save(department);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
 
     private Department findDepartmentOrThrow(Long id) {
         return departmentRepository.findById(id)

@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import ru.sandr.users.core.exception.ConflictException;
 import ru.sandr.users.core.exception.MissedRequiredArgument;
 import ru.sandr.users.core.exception.ObjectNotFoundException;
+import ru.sandr.users.hierarchy.entity.StudentGroup;
 import ru.sandr.users.hierarchy.repository.DepartmentRepository;
 import ru.sandr.users.hierarchy.repository.StudentGroupRepository;
 import ru.sandr.users.security.utils.PasswordAndTokenGenerator;
@@ -26,8 +27,12 @@ import ru.sandr.users.user.events.UserCreatedEvent;
 import ru.sandr.users.user.mapper.UserMapper;
 import ru.sandr.users.user.repository.*;
 
+import ru.sandr.users.imports.dto.StudentImportRow;
+import ru.sandr.users.imports.dto.TeacherImportRow;
+
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -372,6 +377,239 @@ public class AdminUserService {
 
             return cb.and(predicates.toArray(new Predicate[0]));
         };
+    }
+
+    /**
+     * Checks only the given usernames against the DB — O(batch) memory, not O(total users).
+     * Returns the subset that already exist.
+     */
+    @Transactional(readOnly = true)
+    public Set<String> findExistingUsernamesIn(Collection<String> usernames) {
+        if (usernames.isEmpty()) return Set.of();
+        return new HashSet<>(userRepository.findExistingUsernamesIn(usernames));
+    }
+
+    /**
+     * Email → username for rows in the current import batch (bounded IN query).
+     */
+    @Transactional(readOnly = true)
+    public Map<String, String> findUsernameByEmailIn(Collection<String> emails) {
+        if (emails == null || emails.isEmpty()) {
+            return Map.of();
+        }
+        return userRepository.findAllByEmailIn(emails).stream()
+                             .collect(Collectors.toMap(
+                                     UserRepository.EmailUsernameProjection::getEmail,
+                                     UserRepository.EmailUsernameProjection::getUsername,
+                                     (a, b) -> a
+                             ));
+    }
+
+    /**
+     * Creates new student users or updates existing ones by username (PostgreSQL upsert semantics; implemented via JPA).
+     */
+    @Transactional
+    public int bulkUpsertStudents(List<StudentImportRow> rows) {
+        if (rows.isEmpty()) return 0;
+        Role studentRole = roleRepository.findByName(RoleName.ROLE_STUDENT.name())
+                                           .orElseThrow(() -> new ObjectNotFoundException(
+                                                   "ROLE_NOT_FOUND",
+                                                   "ROLE_STUDENT not found"
+                                           ));
+        LocalDateTime now = LocalDateTime.now();
+        String actor = currentUsername();
+        List<String> usernames = rows.stream().map(StudentImportRow::username).toList();
+        Map<String, User> existingByUsername = userRepository.findAllByUsernameInWithStudentProfile(usernames)
+                                                             .stream()
+                                                             .collect(Collectors.toMap(
+                                                                     User::getUsername,
+                                                                     Function.identity(),
+                                                                     (a, b) -> a
+                                                             ));
+        for (StudentImportRow row : rows) {
+            User existing = existingByUsername.get(row.username());
+            if (existing != null) {
+                updateStudentFromImport(existing, row, studentRole, now, actor);
+            } else {
+                User created = createStudentFromImport(row, studentRole, now, actor);
+                existingByUsername.put(row.username(), created);
+            }
+        }
+        return rows.size();
+    }
+
+    private User createStudentFromImport(StudentImportRow row, Role studentRole, LocalDateTime now, String actor) {
+        String tempPassword = PasswordAndTokenGenerator.generate(PASSWORD_LENGTH);
+        User user = User.builder()
+                        .username(row.username())
+                        .email(row.email())
+                        .password(passwordEncoder.encode(tempPassword))
+                        .firstName(row.firstName())
+                        .lastName(row.lastName())
+                        .middleName(row.middleName())
+                        .active(row.active())
+                        .createdAt(now)
+                        .createdBy(actor)
+                        .updatedAt(now)
+                        .updatedBy(actor)
+                        .build();
+        User savedUser = userRepository.save(user);
+
+        userRoleRepository.save(UserRole.builder()
+                                        .id(new UserRoleId(savedUser.getId(), studentRole.getId()))
+                                        .user(savedUser)
+                                        .role(studentRole)
+                                        .createdAt(now)
+                                        .build());
+
+        StudentGroup group = studentGroupRepository.getReferenceById(row.groupId());
+        studentProfileRepository.save(StudentProfile.builder()
+                                                      .user(savedUser)
+                                                      .group(group)
+                                                      .build());
+
+        eventPublisher.publishEvent(UserCreatedEvent.builder()
+                                                    .userId(savedUser.getId())
+                                                    .email(savedUser.getEmail())
+                                                    .username(savedUser.getUsername())
+                                                    .firstName(savedUser.getFirstName())
+                                                    .lastName(savedUser.getLastName())
+                                                    .temporaryPassword(tempPassword)
+                                                    .build());
+        return savedUser;
+    }
+
+    private void updateStudentFromImport(User user, StudentImportRow row, Role studentRole, LocalDateTime now, String actor) {
+        user.setEmail(row.email());
+        user.setFirstName(row.firstName());
+        user.setLastName(row.lastName());
+        user.setMiddleName(row.middleName());
+        user.setActive(row.active());
+        user.setUpdatedAt(now);
+        user.setUpdatedBy(actor);
+        userRepository.save(user);
+
+        StudentGroup group = studentGroupRepository.getReferenceById(row.groupId());
+        if (user.getStudentProfile() == null) {
+            studentProfileRepository.save(StudentProfile.builder().user(user).group(group).build());
+        } else {
+            StudentProfile sp = user.getStudentProfile();
+            sp.setGroup(group);
+            studentProfileRepository.save(sp);
+        }
+
+        if (!userRoleRepository.existsByUserIdAndRoleName(user.getId(), RoleName.ROLE_STUDENT.name())) {
+            userRoleRepository.save(UserRole.builder()
+                                            .id(new UserRoleId(user.getId(), studentRole.getId()))
+                                            .user(user)
+                                            .role(studentRole)
+                                            .createdAt(now)
+                                            .build());
+        }
+    }
+
+    /**
+     * Creates new teacher users or updates existing ones by username (same semantics as student import upsert).
+     */
+    @Transactional
+    public int bulkUpsertTeachers(List<TeacherImportRow> rows) {
+        if (rows.isEmpty()) return 0;
+        Role teacherRole = roleRepository.findByName(RoleName.ROLE_TEACHER.name())
+                                         .orElseThrow(() -> new ObjectNotFoundException(
+                                                 "ROLE_NOT_FOUND",
+                                                 "ROLE_TEACHER not found"
+                                         ));
+        LocalDateTime now = LocalDateTime.now();
+        String actor = currentUsername();
+        List<String> usernames = rows.stream().map(TeacherImportRow::username).toList();
+        Map<String, User> existingByUsername = userRepository.findAllByUsernameInWithTeacherProfile(usernames)
+                                                               .stream()
+                                                               .collect(Collectors.toMap(
+                                                                       User::getUsername,
+                                                                       Function.identity(),
+                                                                       (a, b) -> a
+                                                               ));
+        for (TeacherImportRow row : rows) {
+            User existing = existingByUsername.get(row.username());
+            if (existing != null) {
+                updateTeacherFromImport(existing, row, teacherRole, now, actor);
+            } else {
+                User created = createTeacherFromImport(row, teacherRole, now, actor);
+                existingByUsername.put(row.username(), created);
+            }
+        }
+        return rows.size();
+    }
+
+    private User createTeacherFromImport(TeacherImportRow row, Role teacherRole, LocalDateTime now, String actor) {
+        String tempPassword = PasswordAndTokenGenerator.generate(PASSWORD_LENGTH);
+        User user = User.builder()
+                        .username(row.username())
+                        .email(row.email())
+                        .password(passwordEncoder.encode(tempPassword))
+                        .firstName(row.firstName())
+                        .lastName(row.lastName())
+                        .middleName(row.middleName())
+                        .active(row.active())
+                        .createdAt(now)
+                        .createdBy(actor)
+                        .updatedAt(now)
+                        .updatedBy(actor)
+                        .build();
+        User savedUser = userRepository.save(user);
+
+        userRoleRepository.save(UserRole.builder()
+                                        .id(new UserRoleId(savedUser.getId(), teacherRole.getId()))
+                                        .user(savedUser)
+                                        .role(teacherRole)
+                                        .createdAt(now)
+                                        .build());
+
+        teacherProfileRepository.save(TeacherProfile.builder()
+                                                     .user(savedUser)
+                                                     .department(departmentRepository.getReferenceById(row.departmentId()))
+                                                     .build());
+
+        eventPublisher.publishEvent(UserCreatedEvent.builder()
+                                                    .userId(savedUser.getId())
+                                                    .email(savedUser.getEmail())
+                                                    .username(savedUser.getUsername())
+                                                    .firstName(savedUser.getFirstName())
+                                                    .lastName(savedUser.getLastName())
+                                                    .temporaryPassword(tempPassword)
+                                                    .build());
+        return savedUser;
+    }
+
+    private void updateTeacherFromImport(User user, TeacherImportRow row, Role teacherRole, LocalDateTime now, String actor) {
+        user.setEmail(row.email());
+        user.setFirstName(row.firstName());
+        user.setLastName(row.lastName());
+        user.setMiddleName(row.middleName());
+        user.setActive(row.active());
+        user.setUpdatedAt(now);
+        user.setUpdatedBy(actor);
+        userRepository.save(user);
+
+        var department = departmentRepository.getReferenceById(row.departmentId());
+        if (user.getTeacherProfile() == null) {
+            teacherProfileRepository.save(TeacherProfile.builder()
+                                                         .user(user)
+                                                         .department(department)
+                                                         .build());
+        } else {
+            user.getTeacherProfile().setDepartment(department);
+            teacherProfileRepository.save(user.getTeacherProfile());
+        }
+
+        if (!userRoleRepository.existsByUserIdAndRoleName(user.getId(), RoleName.ROLE_TEACHER.name())) {
+            userRoleRepository.save(UserRole.builder()
+                                            .id(new UserRoleId(user.getId(), teacherRole.getId()))
+                                            .user(user)
+                                            .role(teacherRole)
+                                            .createdAt(now)
+                                            .build());
+        }
     }
 
     private User findUserOrThrow(UUID id) {

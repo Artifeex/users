@@ -40,4 +40,3 @@ public class StudentProfile {
     @JoinColumn(name = "group_id", nullable = false)
     private StudentGroup group;
 }
-

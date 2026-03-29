@@ -19,12 +19,14 @@ import ru.sandr.users.hierarchy.repository.FieldOfStudyRepository;
 import ru.sandr.users.hierarchy.repository.StudentGroupRepository;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class FieldOfStudyService {
 
-    private static final int CODE_MAX_LEN = 20;
     private static final int NAME_MAX_LEN = 255;
 
     private final FieldOfStudyRepository fieldOfStudyRepository;
@@ -42,7 +44,6 @@ public class FieldOfStudyService {
         LocalDateTime now = LocalDateTime.now();
         String actor = currentUsername();
         FieldOfStudy field = FieldOfStudy.builder()
-                .code(request.code())
                 .name(request.name())
                 .faculty(faculty)
                 .createdAt(now)
@@ -66,15 +67,6 @@ public class FieldOfStudyService {
     @Transactional
     public FieldOfStudyResponse update(Long id, UpdateFieldOfStudyRequest request) {
         FieldOfStudy field = findFieldOrThrow(id);
-        if (request.code() != null) {
-            if (request.code().isBlank()) {
-                throw new MissedRequiredArgument("CODE_BLANK", "Code must not be blank when provided");
-            }
-            if (request.code().length() > CODE_MAX_LEN) {
-                throw new BadRequestException("CODE_TOO_LONG", "Code must be at most " + CODE_MAX_LEN + " characters");
-            }
-            field.setCode(request.code());
-        }
         if (request.name() != null) {
             if (request.name().isBlank()) {
                 throw new MissedRequiredArgument("NAME_BLANK", "Name must not be blank when provided");
@@ -109,6 +101,46 @@ public class FieldOfStudyService {
         }
         fieldOfStudyRepository.deleteById(id);
     }
+
+    // ── Import helpers ────────────────────────────────────────────────────────
+
+    /**
+     * Returns "facultyName|fosName" → fosId via scalar projection — no entity objects.
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Long> findAllAsCompositeKeyIdMap() {
+        return fieldOfStudyRepository.findAllCompositeProjections().stream()
+                .collect(Collectors.toMap(
+                        p -> p.getFacultyName() + "|" + p.getFosName(),
+                        FieldOfStudyRepository.CompositeProjection::getId,
+                        (a, b) -> a
+                ));
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Long> findNameIdMapByFacultyIdAndFosNames(Long facultyId, Collection<String> fosNames) {
+        if (facultyId == null || fosNames == null || fosNames.isEmpty()) {
+            return Map.of();
+        }
+        return fieldOfStudyRepository.findNameIdProjectionsByFacultyIdAndNames(facultyId, fosNames).stream()
+                .collect(Collectors.toMap(
+                        FieldOfStudyRepository.FosNameIdProjection::getName,
+                        FieldOfStudyRepository.FosNameIdProjection::getId,
+                        (a, b) -> a
+                ));
+    }
+
+    /** Returns a Hibernate proxy for FK assignment — no SELECT is issued. */
+    public FieldOfStudy getReference(Long id) {
+        return fieldOfStudyRepository.getReferenceById(id);
+    }
+
+    @Transactional
+    public FieldOfStudy saveEntity(FieldOfStudy fieldOfStudy) {
+        return fieldOfStudyRepository.save(fieldOfStudy);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
 
     private FieldOfStudy findFieldOrThrow(Long id) {
         return fieldOfStudyRepository.findById(id)

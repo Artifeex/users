@@ -12,6 +12,8 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import ru.sandr.users.core.dto.ApiErrorResponse;
 import ru.sandr.users.core.exception.*;
+import ru.sandr.users.imports.dto.ImportValidationErrorResponse;
+import ru.sandr.users.imports.exception.ImportValidationException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -92,6 +94,18 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiErrorResponse handleMissedRequiredArgument(MissedRequiredArgument ex) {
         return new ApiErrorResponse(ex.getMessage(), ex.getCode());
+    }
+
+    @ExceptionHandler(BadRequestException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiErrorResponse handleBadRequest(BadRequestException ex) {
+        return new ApiErrorResponse(ex.getMessage(), ex.getCode());
+    }
+
+    @ExceptionHandler(ImportValidationException.class)
+    @ResponseStatus(HttpStatus.UNPROCESSABLE_ENTITY)
+    public ImportValidationErrorResponse handleImportValidation(ImportValidationException ex) {
+        return new ImportValidationErrorResponse(ex.getMessage(), ex.getErrors());
     }
 
 }

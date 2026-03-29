@@ -35,9 +35,6 @@ public class FieldOfStudy extends AuditableEntity {
     @Column(name = "id")
     private Long id;
 
-    @Column(name = "code", nullable = false, length = 20)
-    private String code;
-
     @Column(name = "name", nullable = false, length = 255)
     private String name;
 

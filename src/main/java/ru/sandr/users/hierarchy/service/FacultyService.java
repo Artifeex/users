@@ -21,6 +21,9 @@ import ru.sandr.users.hierarchy.repository.FieldOfStudyRepository;
 import ru.sandr.users.hierarchy.repository.StudentGroupRepository;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -85,6 +88,46 @@ public class FacultyService {
         }
         facultyRepository.deleteById(id);
     }
+
+    // ── Import helpers ────────────────────────────────────────────────────────
+
+    /**
+     * Returns name → id map via scalar projection — no entity objects enter the session.
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Long> findAllAsNameIdMap() {
+        return facultyRepository.findAllNameIdProjections().stream()
+                .collect(Collectors.toMap(
+                        FacultyRepository.NameIdProjection::getName,
+                        FacultyRepository.NameIdProjection::getId,
+                        (a, b) -> a
+                ));
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Long> findNameIdMapByNames(Collection<String> names) {
+        if (names == null || names.isEmpty()) {
+            return Map.of();
+        }
+        return facultyRepository.findNameIdProjectionsByNames(names).stream()
+                .collect(Collectors.toMap(
+                        FacultyRepository.NameIdProjection::getName,
+                        FacultyRepository.NameIdProjection::getId,
+                        (a, b) -> a
+                ));
+    }
+
+    /** Returns a Hibernate proxy for FK assignment — no SELECT is issued. */
+    public Faculty getReference(Long id) {
+        return facultyRepository.getReferenceById(id);
+    }
+
+    @Transactional
+    public Faculty saveEntity(Faculty faculty) {
+        return facultyRepository.save(faculty);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
 
     private Faculty findFacultyOrThrow(Long id) {
         return facultyRepository.findById(id)
