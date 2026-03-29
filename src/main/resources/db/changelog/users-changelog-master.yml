@@ -11,3 +11,6 @@ databaseChangeLog:
   - include:
       file: users/0004-init-reset-password-schema.sql
       relativeToChangelogFile: true
+  - include:
+      file: users/0005-init-outbox.sql
+      relativeToChangelogFile: true

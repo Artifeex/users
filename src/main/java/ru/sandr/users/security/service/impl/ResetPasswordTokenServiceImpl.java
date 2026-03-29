@@ -2,6 +2,7 @@ package ru.sandr.users.security.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,6 +14,8 @@ import ru.sandr.users.security.service.ResetPasswordTokenService;
 import ru.sandr.users.security.utils.HashUtils;
 import ru.sandr.users.security.utils.PasswordAndTokenGenerator;
 import ru.sandr.users.user.entity.User;
+import ru.sandr.users.user.events.PasswordChangedEvent;
+import ru.sandr.users.user.events.ResetPasswordEvent;
 import ru.sandr.users.user.repository.UserRepository;
 
 import java.time.Duration;
@@ -26,6 +29,7 @@ public class ResetPasswordTokenServiceImpl implements ResetPasswordTokenService 
     private final ResetPasswordTokenRepository resetPasswordTokenRepository;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     @Value("${tokens.resetPassword.length:15}")
     private Integer tokenLength;
@@ -48,6 +52,15 @@ public class ResetPasswordTokenServiceImpl implements ResetPasswordTokenService 
                                                    .build();
         resetPasswordTokenRepository.save(resetPasswordToken);
 
+        String linkToResetEmail = null; // написать метод для генерации такой ссылки
+
+        applicationEventPublisher.publishEvent(ResetPasswordEvent.builder()
+                                                                 .userId(user.getId())
+                                                                 .email(user.getEmail())
+                                                                 .linkForResetEvent(linkToResetEmail)
+                                                                 .build()
+        );
+
         // Сохранить в outbox таблицу event и потом handler отправит в kafka message об этом
         // В event нужно передать:
         // email
@@ -59,9 +72,14 @@ public class ResetPasswordTokenServiceImpl implements ResetPasswordTokenService 
     @Override
     public void resetPassword(ResetPasswordRequestDto requestDto) {
         String tokenHash = HashUtils.hashToken(requestDto.token());
+        // Как отреагировать на некорректный токен? Сообщить пользователю или нет?
         var resetToken = resetPasswordTokenRepository.findByTokenHash(tokenHash).orElseThrow();
         var user = resetToken.getUser();
         user.setPassword(passwordEncoder.encode(requestDto.newPassword()));
+        applicationEventPublisher.publishEvent(PasswordChangedEvent.builder()
+                                                                   .userId(user.getId())
+                                                                   .email(user.getEmail())
+                                                                   .build());
     }
 
     @Transactional

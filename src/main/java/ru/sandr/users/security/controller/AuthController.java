@@ -63,13 +63,13 @@ public class AuthController {
 
     @PostMapping("/forgot-password")
     @ResponseStatus(HttpStatus.ACCEPTED)
-    public void forgotPassword(ForgotPasswordRequestDto forgotPasswordRequestDto) {
+    public void forgotPassword(@Valid @RequestBody ForgotPasswordRequestDto forgotPasswordRequestDto) {
         resetPasswordTokenService.forgotPassword(forgotPasswordRequestDto);
     }
 
     @PostMapping("/reset-password")
     @ResponseStatus(HttpStatus.ACCEPTED)
-    public void resetPassword(ResetPasswordRequestDto requestDto) {
+    public void resetPassword(@Valid @RequestBody ResetPasswordRequestDto requestDto) {
         resetPasswordTokenService.resetPassword(requestDto);
     }
 

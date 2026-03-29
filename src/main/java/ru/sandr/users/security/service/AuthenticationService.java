@@ -4,6 +4,7 @@ import io.micrometer.common.util.StringUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -25,6 +26,7 @@ import ru.sandr.users.security.utils.HashUtils;
 import ru.sandr.users.security.utils.JwtUtils;
 import ru.sandr.users.user.dto.ChangePasswordRequest;
 import ru.sandr.users.user.entity.User;
+import ru.sandr.users.user.events.PasswordChangedEvent;
 import ru.sandr.users.user.repository.UserRepository;
 import ru.sandr.users.core.exception.UnauthorizedException;
 
@@ -42,7 +44,7 @@ public class AuthenticationService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private final ResetPasswordTokenService resetPasswordTokenService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Value("${tokens.refresh.expiration:30d}")
     private Duration refreshExpiration;
@@ -96,7 +98,10 @@ public class AuthenticationService {
 
         String tokenHash = HashUtils.hashToken(refreshToken);
         RefreshToken refreshTokenEntity = refreshTokenRepository.findByTokenHash(tokenHash)
-                                                                .orElseThrow(() -> new UnauthorizedException("REFRESH_TOKEN_INVALID", "Invalid refresh token"));
+                                                                .orElseThrow(() -> new UnauthorizedException(
+                                                                        "REFRESH_TOKEN_INVALID",
+                                                                        "Invalid refresh token"
+                                                                ));
 
         Instant now = Instant.now();
         if (!refreshTokenEntity.getExpiryAt().isAfter(now)) {
@@ -126,8 +131,12 @@ public class AuthenticationService {
         }
         user.setPassword(passwordEncoder.encode(request.newPassword()));
         userRepository.save(user);
-        // Сохранить в outbox таблицу event о смене пароля, чтобы отправить на почту сообщение о том
-        // что пароль был изменен
+
+        eventPublisher.publishEvent(PasswordChangedEvent.builder()
+                                                        .email(user.getEmail())
+                                                        .userId(user.getId())
+                                                        .build()
+        );
     }
 
     private User getCurrentUser() {

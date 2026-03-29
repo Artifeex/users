@@ -6,6 +6,7 @@ import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -21,9 +22,8 @@ import ru.sandr.users.hierarchy.repository.StudentGroupRepository;
 import ru.sandr.users.security.utils.PasswordAndTokenGenerator;
 import ru.sandr.users.user.dto.*;
 import ru.sandr.users.user.entity.*;
+import ru.sandr.users.user.events.UserCreatedEvent;
 import ru.sandr.users.user.mapper.UserMapper;
-import ru.sandr.users.user.messaging.UserEventPublisher;
-import ru.sandr.users.user.messaging.event.UserCreatedEvent;
 import ru.sandr.users.user.repository.*;
 
 import java.time.LocalDateTime;
@@ -44,8 +44,8 @@ public class AdminUserService {
     private final StudentGroupRepository studentGroupRepository;
     private final DepartmentRepository departmentRepository;
     private final UserMapper userMapper;
-    private final UserEventPublisher userEventPublisher;
     private final PasswordEncoder passwordEncoder;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public UserResponse createUser(CreateUserRequest request) {
@@ -97,8 +97,16 @@ public class AdminUserService {
         } else if (request.role() == RoleName.ROLE_TEACHER) {
             createProfileForTeacher(request, savedUser);
         }
-        userEventPublisher.publishUserCreated(
-                new UserCreatedEvent(savedUser.getId(), savedUser.getEmail(), savedUser.getUsername(), tempPassword)
+        eventPublisher.publishEvent(
+                UserCreatedEvent.builder()
+                                .userId(savedUser.getId())
+                                .email(savedUser.getEmail())
+                                .username(savedUser.getUsername())
+                                .firstName(savedUser.getFirstName())
+                                .lastName(savedUser.getLastName())
+                                .temporaryPassword(savedUser.getPassword())
+                                .build()
+
         );
         return userMapper.toResponse(savedUser);
     }
@@ -139,7 +147,10 @@ public class AdminUserService {
             }
             updatedUser.setEmail(request.email());
         }
-        if (StringUtils.isNotBlank(request.username()) && !Objects.equals(request.username(), updatedUser.getUsername())) {
+        if (StringUtils.isNotBlank(request.username()) && !Objects.equals(
+                request.username(),
+                updatedUser.getUsername()
+        )) {
             if (userRepository.existsByUsername(request.username())) {
                 throw new ConflictException("USERNAME_TAKEN", "Username already in use: " + request.email());
             }
@@ -179,7 +190,11 @@ public class AdminUserService {
                                                      "DEPARTMENT_NOT_FOUND",
                                                      "Department not found: " + request.departmentId()
                                              ));
-        var teacherProfile = teacherProfileRepository.findById(id).orElseThrow(() -> new ObjectNotFoundException("PROFILE_NOT_FOUND", "Teacher profile not found for user: " + id));
+        var teacherProfile = teacherProfileRepository.findById(id)
+                                                     .orElseThrow(() -> new ObjectNotFoundException(
+                                                             "PROFILE_NOT_FOUND",
+                                                             "Teacher profile not found for user: " + id
+                                                     ));
         teacherProfile.setDepartment(department);
         teacherProfileRepository.save(teacherProfile);
     }
@@ -192,10 +207,10 @@ public class AdminUserService {
                                           ));
 
         var studentProfile = studentProfileRepository.findById(id)
-                                                         .orElseThrow(() -> new ObjectNotFoundException(
-                                                                 "PROFILE_NOT_FOUND",
-                                                                 "Student profile not found for user: " + id
-                                                         ));
+                                                     .orElseThrow(() -> new ObjectNotFoundException(
+                                                             "PROFILE_NOT_FOUND",
+                                                             "Student profile not found for user: " + id
+                                                     ));
         studentProfile.setGroup(group);
         studentProfileRepository.save(studentProfile);
     }
@@ -245,10 +260,10 @@ public class AdminUserService {
                 );
             }
             var group = studentGroupRepository.findById(request.groupId())
-                                                .orElseThrow(() -> new ObjectNotFoundException(
-                                                        "GROUP_NOT_FOUND",
-                                                        "Student group not found: " + request.groupId()
-                                                ));
+                                              .orElseThrow(() -> new ObjectNotFoundException(
+                                                      "GROUP_NOT_FOUND",
+                                                      "Student group not found: " + request.groupId()
+                                              ));
             user.setStudentProfile(StudentProfile.builder().user(user).group(group).build());
         }
 
@@ -262,10 +277,10 @@ public class AdminUserService {
                 );
             }
             var department = departmentRepository.findById(request.departmentId())
-                                                   .orElseThrow(() -> new ObjectNotFoundException(
-                                                           "DEPARTMENT_NOT_FOUND",
-                                                           "Department not found: " + request.departmentId()
-                                                   ));
+                                                 .orElseThrow(() -> new ObjectNotFoundException(
+                                                         "DEPARTMENT_NOT_FOUND",
+                                                         "Department not found: " + request.departmentId()
+                                                 ));
             user.setTeacherProfile(TeacherProfile.builder().user(user).department(department).build());
         }
     }
@@ -292,7 +307,7 @@ public class AdminUserService {
 
     private void validateRoleAssignments(User user, UpdateUserByAdminRequest request, List<Role> resolved) {
         boolean assigningStudentRole = resolved.stream()
-                                         .anyMatch(r -> RoleName.ROLE_STUDENT.name().equals(r.getName()));
+                                               .anyMatch(r -> RoleName.ROLE_STUDENT.name().equals(r.getName()));
         if (assigningStudentRole) {
             boolean hasGroup = request.groupId() != null
                     || (user.getStudentProfile() != null && user.getStudentProfile().getGroup() != null);
@@ -304,7 +319,7 @@ public class AdminUserService {
             }
         }
         boolean assigningTeacherRole = resolved.stream()
-                                         .anyMatch(r -> RoleName.ROLE_TEACHER.name().equals(r.getName()));
+                                               .anyMatch(r -> RoleName.ROLE_TEACHER.name().equals(r.getName()));
         if (assigningTeacherRole) {
             boolean hasDepartment = request.departmentId() != null
                     || (user.getTeacherProfile() != null && user.getTeacherProfile().getDepartment() != null);
