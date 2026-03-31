@@ -14,6 +14,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import ru.sandr.users.hierarchy.entity.Department;
 import ru.sandr.users.hierarchy.entity.StudentGroup;
 
 import java.util.UUID;
@@ -39,4 +40,8 @@ public class StudentProfile {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "group_id", nullable = false)
     private StudentGroup group;
+
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "department_id")
+    private Department department;
 }

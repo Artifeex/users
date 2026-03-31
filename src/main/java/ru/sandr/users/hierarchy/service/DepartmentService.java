@@ -1,6 +1,7 @@
 package ru.sandr.users.hierarchy.service;
 
 import lombok.RequiredArgsConstructor;
+import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -20,6 +21,7 @@ import ru.sandr.users.user.service.TeacherProfileService;
 
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -34,20 +36,20 @@ public class DepartmentService {
     @Transactional
     public DepartmentResponse create(CreateDepartmentRequest request) {
         var faculty = facultyRepository.findById(request.facultyId())
-                .orElseThrow(() -> new ObjectNotFoundException(
-                        "FACULTY_NOT_FOUND",
-                        "Faculty not found: " + request.facultyId()
-                ));
+                                       .orElseThrow(() -> new ObjectNotFoundException(
+                                               "FACULTY_NOT_FOUND",
+                                               "Faculty not found: " + request.facultyId()
+                                       ));
         LocalDateTime now = LocalDateTime.now();
         String actor = currentUsername();
         Department department = Department.builder()
-                .name(request.name())
-                .faculty(faculty)
-                .createdAt(now)
-                .createdBy(actor)
-                .updatedAt(now)
-                .updatedBy(actor)
-                .build();
+                                          .name(request.name())
+                                          .faculty(faculty)
+                                          .createdAt(now)
+                                          .createdBy(actor)
+                                          .updatedAt(now)
+                                          .updatedBy(actor)
+                                          .build();
         return departmentMapper.toResponse(departmentRepository.save(department));
     }
 
@@ -69,10 +71,10 @@ public class DepartmentService {
         }
         if (request.facultyId() != null) {
             var faculty = facultyRepository.findById(request.facultyId())
-                    .orElseThrow(() -> new ObjectNotFoundException(
-                            "FACULTY_NOT_FOUND",
-                            "Faculty not found: " + request.facultyId()
-                    ));
+                                           .orElseThrow(() -> new ObjectNotFoundException(
+                                                   "FACULTY_NOT_FOUND",
+                                                   "Faculty not found: " + request.facultyId()
+                                           ));
             department.setFaculty(faculty);
         }
         LocalDateTime now = LocalDateTime.now();
@@ -102,11 +104,11 @@ public class DepartmentService {
     @Transactional(readOnly = true)
     public Map<String, Long> findAllAsNameMap() {
         return departmentRepository.findAllNameIdProjections().stream()
-                .collect(Collectors.toMap(
-                        DepartmentRepository.NameIdProjection::getName,
-                        DepartmentRepository.NameIdProjection::getId,
-                        (a, b) -> a
-                ));
+                                   .collect(Collectors.toMap(
+                                           DepartmentRepository.NameIdProjection::getName,
+                                           DepartmentRepository.NameIdProjection::getId,
+                                           (a, b) -> a
+                                   ));
     }
 
     /**
@@ -116,14 +118,16 @@ public class DepartmentService {
     @Transactional(readOnly = true)
     public Map<String, Long> findAllAsCompositeKeyIdMap() {
         return departmentRepository.findAllCompositeProjections().stream()
-                .collect(Collectors.toMap(
-                        p -> p.getFacultyName() + "|" + p.getDeptName(),
-                        DepartmentRepository.CompositeProjection::getId,
-                        (a, b) -> a
-                ));
+                                   .collect(Collectors.toMap(
+                                           p -> p.getFacultyName() + "|" + p.getDeptName(),
+                                           DepartmentRepository.CompositeProjection::getId,
+                                           (a, b) -> a
+                                   ));
     }
 
-    /** Returns a Hibernate proxy for FK assignment — no SELECT is issued. */
+    /**
+     * Returns a Hibernate proxy for FK assignment — no SELECT is issued.
+     */
     public Department getReference(Long id) {
         return departmentRepository.getReferenceById(id);
     }
@@ -137,11 +141,25 @@ public class DepartmentService {
 
     private Department findDepartmentOrThrow(Long id) {
         return departmentRepository.findById(id)
-                .orElseThrow(() -> new ObjectNotFoundException("DEPARTMENT_NOT_FOUND", "Department not found: " + id));
+                                   .orElseThrow(() -> new ObjectNotFoundException(
+                                           "DEPARTMENT_NOT_FOUND",
+                                           "Department not found: " + id
+                                   ));
     }
 
     private String currentUsername() {
         var auth = SecurityContextHolder.getContext().getAuthentication();
         return (auth != null && auth.isAuthenticated()) ? auth.getName() : "system";
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Long> findDepartmentIdsByNamesIs(Set<String> departmentNames) {
+        if (CollectionUtils.isEmpty(departmentNames)) {
+            return Map.of();
+        }
+        return departmentRepository.findByDepartmentNameIn(departmentNames).stream().collect(Collectors.toMap(
+                DepartmentRepository.DepartmentProjection::getName,
+                DepartmentRepository.DepartmentProjection::getId
+        ));
     }
 }

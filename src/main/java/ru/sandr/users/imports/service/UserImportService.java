@@ -1,6 +1,8 @@
 package ru.sandr.users.imports.service;
 
+import lombok.Builder;
 import lombok.RequiredArgsConstructor;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,7 +31,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class UserImportService {
 
-    private static final int BATCH_SIZE = 100;
+    private static final int BATCH_SIZE = 5000;
     private static final Pattern EMAIL_PATTERN =
             Pattern.compile("^[a-zA-Z0-9._%+\\-]+@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]{2,}$");
 
@@ -53,28 +55,37 @@ public class UserImportService {
         validateImportStudentsFile(file);
 
         int[] imported = {0};
-        List<StudentImportPending> batch = new ArrayList<>(BATCH_SIZE);
+        List<StudentImportPendingRow> batch = new ArrayList<>(BATCH_SIZE);
 
         try {
-            parser.parse(file.getInputStream(), (rowIndex, cells) -> {
-                String groupName = cell(cells, 0);
-                String username = cell(cells, 1);
-                String email = cell(cells, 5);
+            parser.parse(
+                    file.getInputStream(), (rowIndex, cells) -> {
+                        String groupName = cell(cells, 0);
+                        String username = cell(cells, 1);
+                        String lastName = cell(cells, 2);
+                        String firstName = cell(cells, 3);
+                        String middleName = cell(cells, 4);
+                        String email = cell(cells, 5);
+                        String activeFlag = cell(cells, 6);
+                        String departmentName = cell(cells, 7);
 
-                batch.add(new StudentImportPending(
-                        username,
-                        email.isBlank() ? null : email,
-                        cell(cells, 3),
-                        cell(cells, 2),
-                        blankToNull(cell(cells, 4)),
-                        parseActiveFlag(cell(cells, 6)),
-                        groupName
-                ));
+                        batch.add(StudentImportPendingRow.builder()
+                                                         .groupName(groupName)
+                                                         .username(username)
+                                                         .lastName(lastName)
+                                                         .firstName(firstName)
+                                                         .middleName(middleName)
+                                                         .email(email)
+                                                         .active(parseActiveFlag(activeFlag))
+                                                         .departmentName(departmentName)
+                                                         .build()
+                        );
 
-                if (batch.size() >= BATCH_SIZE) {
-                    imported[0] += flushStudentImportBatch(batch);
-                }
-            });
+                        if (batch.size() >= BATCH_SIZE) {
+                            imported[0] += flushStudentImportBatch(batch);
+                        }
+                    }
+            );
         } catch (IOException e) {
             throw new BadRequestException("FILE_READ_ERROR", "Cannot read uploaded file");
         }
@@ -91,13 +102,21 @@ public class UserImportService {
         List<PendingStudentRow> buffer = new ArrayList<>(BATCH_SIZE);
 
         try {
-            parser.parse(file.getInputStream(), (rowIndex, cells) -> {
-                buffer.add(new PendingStudentRow(rowIndex, cells));
-                if (buffer.size() >= BATCH_SIZE) {
-                    flushStudentValidationBuffer(buffer, errors);
-                    buffer.clear();
-                }
-            });
+            parser.parse(
+                    file.getInputStream(), (rowIndex, cells) -> {
+                        if (rowIndex == 0) {
+                            return;
+                        }
+                        if (errors.size() >= maxImportErrors) {
+                            return;
+                        }
+                        buffer.add(new PendingStudentRow(rowIndex, cells));
+                        if (buffer.size() >= BATCH_SIZE) {
+                            flushStudentValidationBuffer(buffer, errors);
+                            buffer.clear();
+                        }
+                    }
+            );
         } catch (IOException e) {
             throw new BadRequestException("FILE_READ_ERROR", "Cannot read uploaded file");
         }
@@ -118,27 +137,33 @@ public class UserImportService {
 
         Set<String> groupNames = new HashSet<>();
         Set<String> emails = new HashSet<>();
+        Set<String> departmentNames = new HashSet<>();
         for (PendingStudentRow pr : buffer) {
-            String[] c = pr.cells();
-            String g = cell(c, 0);
-            if (!g.isBlank()) {
-                groupNames.add(g);
+            String[] cells = pr.cells();
+            String groupCell = cell(cells, 0);
+            if (!groupCell.isBlank()) {
+                groupNames.add(groupCell);
             }
-            String e = cell(c, 5);
-            if (!e.isBlank()) {
-                emails.add(e);
+            String emailCell = cell(cells, 5);
+            if (!emailCell.isBlank()) {
+                emails.add(emailCell);
+            }
+            String departmentCell = cell(cells, 7);
+            if (!departmentCell.isBlank()) {
+                departmentNames.add(departmentCell);
             }
         }
 
-        Map<String, Long> groupMap = studentGroupService.findGroupIdsByNamesIn(groupNames);
-        Map<String, String> emailToUsernameDb = adminUserService.findUsernameByEmailIn(emails);
+        Map<String, Long> groupIdByGroupName = studentGroupService.findGroupIdsByNamesIn(groupNames);
+        Map<String, String> usernameByEmail = adminUserService.findUsernameByEmailIn(emails);
+        Map<String, Long> departmentIdByDepartmentName = departmentService.findDepartmentIdsByNamesIs(departmentNames);
 
-        for (PendingStudentRow pr : buffer) {
+        for (PendingStudentRow row : buffer) {
             if (errors.size() >= maxImportErrors) {
                 break;
             }
-            String[] cells = pr.cells();
-            int displayRow = pr.rowIndex() + 1;
+            String[] cells = row.cells();
+            int displayRow = row.rowIndex() + 1;
 
             String groupName = cell(cells, 0);
             String username = cell(cells, 1);
@@ -146,13 +171,16 @@ public class UserImportService {
             String firstName = cell(cells, 3);
             String email = cell(cells, 5);
             String activeFlag = cell(cells, 6);
+            String departmentName = cell(cells, 7);
 
             if (groupName.isBlank()) {
                 errors.add(new ImportRowError(displayRow, "Group", "Required field is blank"));
-            } else if (!groupMap.containsKey(groupName)) {
+            } else if (!groupIdByGroupName.containsKey(groupName)) {
                 errors.add(new ImportRowError(displayRow, "Group", "Group not found: " + groupName));
             }
-
+            if (!departmentName.isBlank() && !departmentIdByDepartmentName.containsKey(departmentName)) {
+                errors.add(new ImportRowError(displayRow, "Department", "Department not found: " + departmentName));
+            }
             if (username.isBlank()) {
                 errors.add(new ImportRowError(displayRow, "Student ID", "Required field is blank"));
             }
@@ -164,12 +192,13 @@ public class UserImportService {
             }
             if (email.isBlank()) {
                 errors.add(new ImportRowError(displayRow, "Email", "Required field is blank"));
-            } else if (!EMAIL_PATTERN.matcher(email).matches()) {
-                errors.add(new ImportRowError(displayRow, "Email", "Invalid email format"));
             }
+//                        else if (!EMAIL_PATTERN.matcher(email).matches()) {
+//                errors.add(new ImportRowError(displayRow, "Email", "Invalid email format"));
+//            }
 
             if (!email.isBlank()) {
-                String ownerInDb = emailToUsernameDb.get(email);
+                String ownerInDb = usernameByEmail.get(email);
                 if (ownerInDb != null && !username.isBlank() && !ownerInDb.equals(username)) {
                     errors.add(new ImportRowError(
                             displayRow,
@@ -180,19 +209,30 @@ public class UserImportService {
             }
 
             if (!isValidActiveFlag(activeFlag)) {
-                errors.add(new ImportRowError(displayRow, "Activity flag",
-                        "Invalid value; expected: 1/0/true/false/yes/no"));
+                errors.add(new ImportRowError(
+                        displayRow, "Activity flag",
+                        "Invalid value; expected: 1/0/true/false/yes/no"
+                ));
             }
         }
     }
 
-    private int flushStudentImportBatch(List<StudentImportPending> batch) {
-        Set<String> groupNames = batch.stream().map(StudentImportPending::groupName).collect(Collectors.toSet());
-        Map<String, Long> groupMap = studentGroupService.findGroupIdsByNamesIn(groupNames);
+    private int flushStudentImportBatch(List<StudentImportPendingRow> batch) {
+        Set<String> groupNames = batch.stream()
+                                      .map(StudentImportPendingRow::groupName)
+                                      .filter(StringUtils::isNotBlank)
+                                      .collect(Collectors.toSet());
+        Set<String> departNames = batch.stream()
+                                       .map(StudentImportPendingRow::departmentName)
+                                       .filter(StringUtils::isNotBlank)
+                                       .collect(Collectors.toSet());
+        Map<String, Long> groupIdByGroupName = studentGroupService.findGroupIdsByNamesIn(groupNames);
+        Map<String, Long> departmentIdByDepartmentName = departmentService.findDepartmentIdsByNamesIs(departNames);
 
         List<StudentImportRow> rows = new ArrayList<>(batch.size());
-        for (StudentImportPending p : batch) {
-            Long groupId = groupMap.get(p.groupName());
+        for (StudentImportPendingRow p : batch) {
+            Long groupId = groupIdByGroupName.get(p.groupName());
+            Long departmentId = departmentIdByDepartmentName.get(p.departmentName());
             rows.add(new StudentImportRow(
                     p.username(),
                     p.email(),
@@ -200,7 +240,8 @@ public class UserImportService {
                     p.lastName(),
                     p.middleName(),
                     p.active(),
-                    groupId
+                    groupId,
+                    departmentId
             ));
         }
         int n = adminUserService.bulkUpsertStudents(rows);
@@ -208,17 +249,21 @@ public class UserImportService {
         return n;
     }
 
-    private record PendingStudentRow(int rowIndex, String[] cells) {}
+    private record PendingStudentRow(int rowIndex, String[] cells) {
+    }
 
-    private record StudentImportPending(
+    @Builder
+    private record StudentImportPendingRow(
             String username,
             String email,
             String firstName,
             String lastName,
             String middleName,
             boolean active,
-            String groupName
-    ) {}
+            String groupName,
+            String departmentName
+    ) {
+    }
 
     /**
      * Type 4 — Teachers.
@@ -233,33 +278,41 @@ public class UserImportService {
         List<ImportRowError> errors = new ArrayList<>();
 
         try {
-            parser.parse(file.getInputStream(), (rowIndex, cells) -> {
-                String username = cell(cells, 0);
-                String lastName = cell(cells, 1);
-                String firstName = cell(cells, 2);
-                String email = cell(cells, 4);
-                String deptName = cell(cells, 5);
-                String activeFlag = cell(cells, 6);
-                int displayRow = rowIndex + 1;
+            parser.parse(
+                    file.getInputStream(), (rowIndex, cells) -> {
+                        String username = cell(cells, 0);
+                        String lastName = cell(cells, 1);
+                        String firstName = cell(cells, 2);
+                        String email = cell(cells, 4);
+                        String deptName = cell(cells, 5);
+                        String activeFlag = cell(cells, 6);
+                        int displayRow = rowIndex + 1;
 
-                if (errors.size() < maxImportErrors) {
-                    if (username.isBlank())
-                        errors.add(new ImportRowError(displayRow, "Teacher ID", "Required field is blank"));
-                    if (lastName.isBlank())
-                        errors.add(new ImportRowError(displayRow, "Last name", "Required field is blank"));
-                    if (firstName.isBlank())
-                        errors.add(new ImportRowError(displayRow, "First name", "Required field is blank"));
-                    if (!email.isBlank() && !EMAIL_PATTERN.matcher(email).matches())
-                        errors.add(new ImportRowError(displayRow, "Email", "Invalid email format"));
-                    if (deptName.isBlank())
-                        errors.add(new ImportRowError(displayRow, "Department", "Required field is blank"));
-                    else if (!deptNameToId.containsKey(deptName))
-                        errors.add(new ImportRowError(displayRow, "Department", "Department not found: " + deptName));
-                    if (!isValidActiveFlag(activeFlag))
-                        errors.add(new ImportRowError(displayRow, "Activity flag",
-                                "Invalid value; expected: 1/0/true/false/yes/no"));
-                }
-            });
+                        if (errors.size() < maxImportErrors) {
+                            if (username.isBlank())
+                                errors.add(new ImportRowError(displayRow, "Teacher ID", "Required field is blank"));
+                            if (lastName.isBlank())
+                                errors.add(new ImportRowError(displayRow, "Last name", "Required field is blank"));
+                            if (firstName.isBlank())
+                                errors.add(new ImportRowError(displayRow, "First name", "Required field is blank"));
+                            if (!email.isBlank() && !EMAIL_PATTERN.matcher(email).matches())
+                                errors.add(new ImportRowError(displayRow, "Email", "Invalid email format"));
+                            if (deptName.isBlank())
+                                errors.add(new ImportRowError(displayRow, "Department", "Required field is blank"));
+                            else if (!deptNameToId.containsKey(deptName))
+                                errors.add(new ImportRowError(
+                                        displayRow,
+                                        "Department",
+                                        "Department not found: " + deptName
+                                ));
+                            if (!isValidActiveFlag(activeFlag))
+                                errors.add(new ImportRowError(
+                                        displayRow, "Activity flag",
+                                        "Invalid value; expected: 1/0/true/false/yes/no"
+                                ));
+                        }
+                    }
+            );
         } catch (IOException e) {
             throw new BadRequestException("FILE_READ_ERROR", "Cannot read uploaded file");
         }
@@ -271,25 +324,27 @@ public class UserImportService {
         List<TeacherImportRow> batch = new ArrayList<>(BATCH_SIZE);
 
         try {
-            parser.parse(file.getInputStream(), (rowIndex, cells) -> {
-                String username = cell(cells, 0);
-                String email = cell(cells, 4);
-                String deptName = cell(cells, 5);
+            parser.parse(
+                    file.getInputStream(), (rowIndex, cells) -> {
+                        String username = cell(cells, 0);
+                        String email = cell(cells, 4);
+                        String deptName = cell(cells, 5);
 
-                batch.add(new TeacherImportRow(
-                        username,
-                        email.isBlank() ? null : email,
-                        cell(cells, 2),              // firstName
-                        cell(cells, 1),              // lastName
-                        blankToNull(cell(cells, 3)), // middleName
-                        parseActiveFlag(cell(cells, 6)),
-                        deptNameToId.get(deptName)
-                ));
+                        batch.add(new TeacherImportRow(
+                                username,
+                                email.isBlank() ? null : email,
+                                cell(cells, 2),              // firstName
+                                cell(cells, 1),              // lastName
+                                blankToNull(cell(cells, 3)), // middleName
+                                parseActiveFlag(cell(cells, 6)),
+                                deptNameToId.get(deptName)
+                        ));
 
-                if (batch.size() >= BATCH_SIZE) {
-                    imported[0] += flushTeacherBatch(batch);
-                }
-            });
+                        if (batch.size() >= BATCH_SIZE) {
+                            imported[0] += flushTeacherBatch(batch);
+                        }
+                    }
+            );
         } catch (IOException e) {
             throw new BadRequestException("FILE_READ_ERROR", "Cannot read uploaded file");
         }

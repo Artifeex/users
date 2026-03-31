@@ -412,27 +412,28 @@ public class AdminUserService {
     public int bulkUpsertStudents(List<StudentImportRow> rows) {
         if (rows.isEmpty()) return 0;
         Role studentRole = roleRepository.findByName(RoleName.ROLE_STUDENT.name())
-                                           .orElseThrow(() -> new ObjectNotFoundException(
-                                                   "ROLE_NOT_FOUND",
-                                                   "ROLE_STUDENT not found"
-                                           ));
+                                         .orElseThrow(() -> new ObjectNotFoundException(
+                                                 "ROLE_NOT_FOUND",
+                                                 "ROLE_STUDENT not found"
+                                         ));
         LocalDateTime now = LocalDateTime.now();
         String actor = currentUsername();
         List<String> usernames = rows.stream().map(StudentImportRow::username).toList();
-        Map<String, User> existingByUsername = userRepository.findAllByUsernameInWithStudentProfile(usernames)
-                                                             .stream()
-                                                             .collect(Collectors.toMap(
-                                                                     User::getUsername,
-                                                                     Function.identity(),
-                                                                     (a, b) -> a
-                                                             ));
+        Map<String, User> userByUsername = userRepository.findAllByUsernameInWithStudentProfile(usernames)
+                                                         .stream()
+                                                         .collect(Collectors.toMap(
+                                                                 User::getUsername,
+                                                                 Function.identity(),
+                                                                 (a, b) -> a
+                                                         ));
+        Set<UUID> userIdsWithStudentRole = userRoleRepository.findUserIdsWithStudentRoleByUsernameIn(usernames);
         for (StudentImportRow row : rows) {
-            User existing = existingByUsername.get(row.username());
+            User existing = userByUsername.get(row.username());
             if (existing != null) {
-                updateStudentFromImport(existing, row, studentRole, now, actor);
+                updateStudentFromImport(existing, userIdsWithStudentRole, row, studentRole, now, actor);
             } else {
                 User created = createStudentFromImport(row, studentRole, now, actor);
-                existingByUsername.put(row.username(), created);
+                userByUsername.put(row.username(), created);
             }
         }
         return rows.size();
@@ -463,10 +464,16 @@ public class AdminUserService {
                                         .build());
 
         StudentGroup group = studentGroupRepository.getReferenceById(row.groupId());
-        studentProfileRepository.save(StudentProfile.builder()
-                                                      .user(savedUser)
-                                                      .group(group)
-                                                      .build());
+        var studentProfileBuilder = StudentProfile.builder()
+                                                  .user(savedUser)
+                                                  .group(group);
+
+        if (row.departmentId() != null) {
+            var department = departmentRepository.getReferenceById(row.departmentId());
+            studentProfileBuilder.department(department);
+        }
+
+        studentProfileRepository.save(studentProfileBuilder.build());
 
         eventPublisher.publishEvent(UserCreatedEvent.builder()
                                                     .userId(savedUser.getId())
@@ -479,7 +486,14 @@ public class AdminUserService {
         return savedUser;
     }
 
-    private void updateStudentFromImport(User user, StudentImportRow row, Role studentRole, LocalDateTime now, String actor) {
+    private void updateStudentFromImport(
+            User user,
+            Set<UUID> userIdsWithStudentRole,
+            StudentImportRow row,
+            Role studentRole,
+            LocalDateTime now,
+            String actor
+    ) {
         user.setEmail(row.email());
         user.setFirstName(row.firstName());
         user.setLastName(row.lastName());
@@ -491,14 +505,23 @@ public class AdminUserService {
 
         StudentGroup group = studentGroupRepository.getReferenceById(row.groupId());
         if (user.getStudentProfile() == null) {
-            studentProfileRepository.save(StudentProfile.builder().user(user).group(group).build());
+            var studentProfileBuilder = StudentProfile.builder().user(user).group(group);
+            if (row.departmentId() != null) {
+                var department = departmentRepository.getReferenceById(row.departmentId());
+                studentProfileBuilder.department(department);
+            }
+            studentProfileRepository.save(studentProfileBuilder.build());
         } else {
             StudentProfile sp = user.getStudentProfile();
             sp.setGroup(group);
+            sp.setDepartment(row.departmentId() != null ? departmentRepository.getReferenceById(row.departmentId()) : null);
             studentProfileRepository.save(sp);
         }
 
-        if (!userRoleRepository.existsByUserIdAndRoleName(user.getId(), RoleName.ROLE_STUDENT.name())) {
+        if (!userIdsWithStudentRole.contains(user.getId()) && !userRoleRepository.existsByUserIdAndRoleName(
+                user.getId(),
+                RoleName.ROLE_STUDENT.name()
+        )) {
             userRoleRepository.save(UserRole.builder()
                                             .id(new UserRoleId(user.getId(), studentRole.getId()))
                                             .user(user)
@@ -523,12 +546,12 @@ public class AdminUserService {
         String actor = currentUsername();
         List<String> usernames = rows.stream().map(TeacherImportRow::username).toList();
         Map<String, User> existingByUsername = userRepository.findAllByUsernameInWithTeacherProfile(usernames)
-                                                               .stream()
-                                                               .collect(Collectors.toMap(
-                                                                       User::getUsername,
-                                                                       Function.identity(),
-                                                                       (a, b) -> a
-                                                               ));
+                                                             .stream()
+                                                             .collect(Collectors.toMap(
+                                                                     User::getUsername,
+                                                                     Function.identity(),
+                                                                     (a, b) -> a
+                                                             ));
         for (TeacherImportRow row : rows) {
             User existing = existingByUsername.get(row.username());
             if (existing != null) {
@@ -566,9 +589,9 @@ public class AdminUserService {
                                         .build());
 
         teacherProfileRepository.save(TeacherProfile.builder()
-                                                     .user(savedUser)
-                                                     .department(departmentRepository.getReferenceById(row.departmentId()))
-                                                     .build());
+                                                    .user(savedUser)
+                                                    .department(departmentRepository.getReferenceById(row.departmentId()))
+                                                    .build());
 
         eventPublisher.publishEvent(UserCreatedEvent.builder()
                                                     .userId(savedUser.getId())
@@ -581,7 +604,13 @@ public class AdminUserService {
         return savedUser;
     }
 
-    private void updateTeacherFromImport(User user, TeacherImportRow row, Role teacherRole, LocalDateTime now, String actor) {
+    private void updateTeacherFromImport(
+            User user,
+            TeacherImportRow row,
+            Role teacherRole,
+            LocalDateTime now,
+            String actor
+    ) {
         user.setEmail(row.email());
         user.setFirstName(row.firstName());
         user.setLastName(row.lastName());
@@ -594,9 +623,9 @@ public class AdminUserService {
         var department = departmentRepository.getReferenceById(row.departmentId());
         if (user.getTeacherProfile() == null) {
             teacherProfileRepository.save(TeacherProfile.builder()
-                                                         .user(user)
-                                                         .department(department)
-                                                         .build());
+                                                        .user(user)
+                                                        .department(department)
+                                                        .build());
         } else {
             user.getTeacherProfile().setDepartment(department);
             teacherProfileRepository.save(user.getTeacherProfile());

@@ -7,5 +7,6 @@ public record StudentImportRow(
         String lastName,
         String middleName,
         boolean active,
-        Long groupId
+        Long groupId,
+        Long departmentId
 ) {}

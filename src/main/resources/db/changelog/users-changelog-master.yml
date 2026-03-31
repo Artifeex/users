@@ -20,6 +20,3 @@ databaseChangeLog:
   - include:
       file: users/0007-drop-fos-code.sql
       relativeToChangelogFile: true
-  - include:
-      file: users/0008-drop-student-profile-department.sql
-      relativeToChangelogFile: true
