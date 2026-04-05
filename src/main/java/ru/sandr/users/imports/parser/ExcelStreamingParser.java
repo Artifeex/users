@@ -45,39 +45,6 @@ public class ExcelStreamingParser {
         }
     }
 
-    /**
-     * Like {@link #parse(InputStream, SheetRowHandler)} but invokes {@code batchHandler} with
-     * up to {@code batchSize} rows at a time, then any remainder after the last full batch.
-     */
-    public void parseBatch(InputStream inputStream, int batchSize, SheetBatchHandler batchHandler) {
-        if (batchSize < 1) {
-            throw new IllegalArgumentException("batchSize must be >= 1");
-        }
-        List<ParsedRow> buffer = new ArrayList<>(batchSize);
-        try (OPCPackage pkg = OPCPackage.open(inputStream)) {
-            XSSFReader reader = new XSSFReader(pkg);
-            var sst = reader.getSharedStringsTable();
-            var styles = reader.getStylesTable();
-
-            XMLReader xmlReader = XMLHelper.newXMLReader();
-            xmlReader.setContentHandler(new XSSFSheetXMLHandler(
-                    styles, null, sst,
-                    new BatchRowCollector(batchSize, buffer, batchHandler),
-                    new DataFormatter(), false
-            ));
-            xmlReader.parse(new InputSource(reader.getSheetsData().next()));
-        } catch (RuntimeException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new BadRequestException("INVALID_FILE_FORMAT",
-                    "Cannot process Excel file: " + e.getMessage());
-        }
-        if (!buffer.isEmpty()) {
-            batchHandler.handleBatch(List.copyOf(buffer));
-            buffer.clear();
-        }
-    }
-
     private static class RowCollector implements XSSFSheetXMLHandler.SheetContentsHandler {
 
         private final SheetRowHandler rowHandler;
@@ -96,44 +63,6 @@ public class ExcelStreamingParser {
         public void endRow(int rowNum) {
             if (rowNum > 0) { // row 0 is the header
                 rowHandler.handleRow(rowNum, currentRow.toArray(new String[0]));
-            }
-        }
-
-        @Override
-        public void cell(String cellRef, String formattedValue, XSSFComment comment) {
-            fillCell(currentRow, cellRef, formattedValue);
-        }
-
-        @Override
-        public void headerFooter(String text, boolean isHeader, String tagName) {}
-    }
-
-    private static class BatchRowCollector implements XSSFSheetXMLHandler.SheetContentsHandler {
-
-        private final int batchSize;
-        private final List<ParsedRow> buffer;
-        private final SheetBatchHandler batchHandler;
-        private final List<String> currentRow = new ArrayList<>();
-
-        BatchRowCollector(int batchSize, List<ParsedRow> buffer, SheetBatchHandler batchHandler) {
-            this.batchSize = batchSize;
-            this.buffer = buffer;
-            this.batchHandler = batchHandler;
-        }
-
-        @Override
-        public void startRow(int rowNum) {
-            currentRow.clear();
-        }
-
-        @Override
-        public void endRow(int rowNum) {
-            if (rowNum > 0) {
-                buffer.add(new ParsedRow(rowNum, currentRow.toArray(new String[0])));
-                if (buffer.size() == batchSize) {
-                    batchHandler.handleBatch(List.copyOf(buffer));
-                    buffer.clear();
-                }
             }
         }
 

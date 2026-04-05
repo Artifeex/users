@@ -102,46 +102,6 @@ public class FieldOfStudyService {
         fieldOfStudyRepository.deleteById(id);
     }
 
-    // ── Import helpers ────────────────────────────────────────────────────────
-
-    /**
-     * Returns "facultyName|fosName" → fosId via scalar projection — no entity objects.
-     */
-    @Transactional(readOnly = true)
-    public Map<String, Long> findAllAsCompositeKeyIdMap() {
-        return fieldOfStudyRepository.findAllCompositeProjections().stream()
-                .collect(Collectors.toMap(
-                        p -> p.getFacultyName() + "|" + p.getFosName(),
-                        FieldOfStudyRepository.CompositeProjection::getId,
-                        (a, b) -> a
-                ));
-    }
-
-    @Transactional(readOnly = true)
-    public Map<String, Long> findNameIdMapByFacultyIdAndFosNames(Long facultyId, Collection<String> fosNames) {
-        if (facultyId == null || fosNames == null || fosNames.isEmpty()) {
-            return Map.of();
-        }
-        return fieldOfStudyRepository.findNameIdProjectionsByFacultyIdAndNames(facultyId, fosNames).stream()
-                .collect(Collectors.toMap(
-                        FieldOfStudyRepository.FosNameIdProjection::getName,
-                        FieldOfStudyRepository.FosNameIdProjection::getId,
-                        (a, b) -> a
-                ));
-    }
-
-    /** Returns a Hibernate proxy for FK assignment — no SELECT is issued. */
-    public FieldOfStudy getReference(Long id) {
-        return fieldOfStudyRepository.getReferenceById(id);
-    }
-
-    @Transactional
-    public FieldOfStudy saveEntity(FieldOfStudy fieldOfStudy) {
-        return fieldOfStudyRepository.save(fieldOfStudy);
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-
     private FieldOfStudy findFieldOrThrow(Long id) {
         return fieldOfStudyRepository.findById(id)
                 .orElseThrow(() -> new ObjectNotFoundException(

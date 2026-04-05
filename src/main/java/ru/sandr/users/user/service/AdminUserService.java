@@ -378,16 +378,6 @@ public class AdminUserService {
     }
 
     /**
-     * Checks only the given usernames against the DB — O(batch) memory, not O(total users).
-     * Returns the subset that already exist.
-     */
-    @Transactional(readOnly = true)
-    public Set<String> findExistingUsernamesIn(Collection<String> usernames) {
-        if (usernames.isEmpty()) return Set.of();
-        return new HashSet<>(userRepository.findExistingUsernamesIn(usernames));
-    }
-
-    /**
      * Email → username for rows in the current import batch (bounded IN query).
      */
     @Transactional(readOnly = true)
@@ -525,119 +515,6 @@ public class AdminUserService {
                                             .role(studentRole)
                                             .build());
         }
-    }
-
-    /**
-     * Creates new teacher users or updates existing ones by username (same semantics as student import upsert).
-     */
-    @Transactional
-    public int bulkUpsertTeachers(List<TeacherImportRow> rows) {
-        if (rows.isEmpty()) return 0;
-        Role teacherRole = roleRepository.findByName(RoleName.ROLE_TEACHER.name())
-                                         .orElseThrow(() -> new ObjectNotFoundException(
-                                                 "ROLE_NOT_FOUND",
-                                                 "ROLE_TEACHER not found"
-                                         ));
-        LocalDateTime now = LocalDateTime.now();
-        String actor = currentUsername();
-        List<String> usernames = rows.stream().map(TeacherImportRow::username).toList();
-        Map<String, User> existingByUsername = userRepository.findAllByUsernameInWithTeacherProfile(usernames)
-                                                             .stream()
-                                                             .collect(Collectors.toMap(
-                                                                     User::getUsername,
-                                                                     Function.identity(),
-                                                                     (a, b) -> a
-                                                             ));
-        for (TeacherImportRow row : rows) {
-            User existing = existingByUsername.get(row.username());
-            if (existing != null) {
-                updateTeacherFromImport(existing, row, teacherRole, now, actor);
-            } else {
-                User created = createTeacherFromImport(row, teacherRole, now, actor);
-                existingByUsername.put(row.username(), created);
-            }
-        }
-        return rows.size();
-    }
-
-    private User createTeacherFromImport(TeacherImportRow row, Role teacherRole, LocalDateTime now, String actor) {
-        String tempPassword = PasswordAndTokenGenerator.generate(PASSWORD_LENGTH);
-        User user = User.builder()
-                        .username(row.username())
-                        .email(row.email())
-                        .password(passwordEncoder.encode(tempPassword))
-                        .firstName(row.firstName())
-                        .lastName(row.lastName())
-                        .middleName(row.middleName())
-                        .active(row.active())
-                        .createdAt(now)
-                        .createdBy(actor)
-                        .updatedAt(now)
-                        .updatedBy(actor)
-                        .build();
-        User savedUser = userRepository.save(user);
-
-        userRoleRepository.save(UserRole.builder()
-                                        .id(new UserRoleId(savedUser.getId(), teacherRole.getId()))
-                                        .user(savedUser)
-                                        .role(teacherRole)
-                                        .build());
-
-        teacherProfileRepository.save(TeacherProfile.builder()
-                                                    .user(savedUser)
-                                                    .department(departmentRepository.getReferenceById(row.departmentId()))
-                                                    .build());
-
-        eventPublisher.publishEvent(UserCreatedEvent.builder()
-                                                    .userId(savedUser.getId())
-                                                    .email(savedUser.getEmail())
-                                                    .username(savedUser.getUsername())
-                                                    .firstName(savedUser.getFirstName())
-                                                    .lastName(savedUser.getLastName())
-                                                    .temporaryPassword(tempPassword)
-                                                    .build());
-        return savedUser;
-    }
-
-    private void updateTeacherFromImport(
-            User user,
-            TeacherImportRow row,
-            Role teacherRole,
-            LocalDateTime now,
-            String actor
-    ) {
-        user.setEmail(row.email());
-        user.setFirstName(row.firstName());
-        user.setLastName(row.lastName());
-        user.setMiddleName(row.middleName());
-        user.setActive(row.active());
-        user.setUpdatedAt(now);
-        user.setUpdatedBy(actor);
-        userRepository.save(user);
-
-        var department = departmentRepository.getReferenceById(row.departmentId());
-        if (user.getTeacherProfile() == null) {
-            teacherProfileRepository.save(TeacherProfile.builder()
-                                                        .user(user)
-                                                        .department(department)
-                                                        .build());
-        } else {
-            user.getTeacherProfile().setDepartment(department);
-            teacherProfileRepository.save(user.getTeacherProfile());
-        }
-
-        if (!userRoleRepository.existsByUserIdAndRoleName(user.getId(), RoleName.ROLE_TEACHER.name())) {
-            userRoleRepository.save(UserRole.builder()
-                                            .id(new UserRoleId(user.getId(), teacherRole.getId()))
-                                            .user(user)
-                                            .role(teacherRole)
-                                            .build());
-        }
-    }
-
-    private User findUserOrThrow(UUID id) {
-        return userRepository.findById(id)
-                             .orElseThrow(() -> new ObjectNotFoundException("USER_NOT_FOUND", "User not found: " + id));
     }
 
     private String currentUsername() {

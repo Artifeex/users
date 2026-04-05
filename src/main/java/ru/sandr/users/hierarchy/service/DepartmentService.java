@@ -95,35 +95,6 @@ public class DepartmentService {
         departmentRepository.deleteById(id);
     }
 
-
-    /**
-     * Returns "facultyName|deptName" → deptId via scalar projection.
-     * Used by HierarchyImportService for composite-key dedup before Pass 2.
-     */
-    @Transactional(readOnly = true)
-    public Map<String, Long> findAllAsCompositeKeyIdMap() {
-        return departmentRepository.findAllCompositeProjections().stream()
-                                   .collect(Collectors.toMap(
-                                           p -> p.getFacultyName() + "|" + p.getDeptName(),
-                                           DepartmentRepository.CompositeProjection::getId,
-                                           (a, b) -> a
-                                   ));
-    }
-
-    /**
-     * Returns a Hibernate proxy for FK assignment — no SELECT is issued.
-     */
-    public Department getReference(Long id) {
-        return departmentRepository.getReferenceById(id);
-    }
-
-    @Transactional
-    public Department saveEntity(Department department) {
-        return departmentRepository.save(department);
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-
     private Department findDepartmentOrThrow(Long id) {
         return departmentRepository.findById(id)
                                    .orElseThrow(() -> new ObjectNotFoundException(

@@ -30,8 +30,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class StudentGroupService {
 
-    private static final int NAME_MAX_LEN = 50;
-
     private final StudentGroupRepository studentGroupRepository;
     private final FacultyRepository facultyRepository;
     private final FieldOfStudyRepository fieldOfStudyRepository;
@@ -104,25 +102,6 @@ public class StudentGroupService {
         studentGroupRepository.deleteById(id);
     }
 
-    // ── Import helpers ────────────────────────────────────────────────────────
-
-    /**
-     * Returns name → id via scalar projection — no entity objects, no session tracking.
-     * Used by UserImportService to validate and resolve group names from student import rows.
-     */
-    @Transactional(readOnly = true)
-    public Map<String, Long> findAllAsNameMap() {
-        return studentGroupRepository.findAllNameIdProjections().stream()
-                .collect(Collectors.toMap(
-                        StudentGroupRepository.NameIdProjection::getName,
-                        StudentGroupRepository.NameIdProjection::getId,
-                        (a, b) -> a
-                ));
-    }
-
-    /**
-     * Resolves group names to ids for a bounded set only — used by student import validation/import batches.
-     */
     @Transactional(readOnly = true)
     public Map<String, Long> findGroupIdsByNamesIn(Collection<String> names) {
         if (names == null || names.isEmpty()) {
@@ -135,32 +114,6 @@ public class StudentGroupService {
                         (a, b) -> a
                 ));
     }
-
-    /**
-     * Returns "facultyName|fosName|groupName" → groupId via scalar projection.
-     * Used by HierarchyImportService for composite-key dedup before Pass 2.
-     */
-    @Transactional(readOnly = true)
-    public Map<String, Long> findAllAsCompositeKeyIdMap() {
-        return studentGroupRepository.findAllCompositeProjections().stream()
-                .collect(Collectors.toMap(
-                        p -> p.getFacultyName() + "|" + p.getFosName() + "|" + p.getGroupName(),
-                        StudentGroupRepository.CompositeProjection::getId,
-                        (a, b) -> a
-                ));
-    }
-
-    /** Returns a Hibernate proxy for FK assignment — no SELECT is issued. */
-    public StudentGroup getReference(Long id) {
-        return studentGroupRepository.getReferenceById(id);
-    }
-
-    @Transactional
-    public StudentGroup saveEntity(StudentGroup group) {
-        return studentGroupRepository.save(group);
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
 
     private StudentGroup findGroupOrThrow(Long id) {
         return studentGroupRepository.findById(id)

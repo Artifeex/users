@@ -12,22 +12,11 @@ public interface DepartmentRepository extends JpaRepository<Department, Long> {
 
     boolean existsByFaculty_Id(Long facultyId);
 
-    @Query("SELECT d.faculty.name AS facultyName, d.name AS deptName, d.id AS id FROM Department d")
-    List<CompositeProjection> findAllCompositeProjections();
-
     @Query("SELECT d.name as name, d.id as id FROM Department d where d.name IN :departmentNames")
     List<DepartmentProjection> findByDepartmentNameIn(@Param("departmentNames") Collection<String> departmentNames);
 
     interface NameIdProjection {
         String getName();
-
-        Long getId();
-    }
-
-    interface CompositeProjection {
-        String getFacultyName();
-
-        String getDeptName();
 
         Long getId();
     }
