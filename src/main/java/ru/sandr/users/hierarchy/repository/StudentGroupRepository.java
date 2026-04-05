@@ -14,6 +14,8 @@ public interface StudentGroupRepository extends JpaRepository<StudentGroup, Long
 
     boolean existsByFieldOfStudy_Id(Long fieldOfStudyId);
 
+    List<StudentGroup> findAllByNameIn(Collection<String> names);
+
     @Query("SELECT sg.name AS name, sg.id AS id FROM StudentGroup sg WHERE sg.name IN :names")
     List<NameIdProjection> findByNameIn(@Param("names") Collection<String> names);
 

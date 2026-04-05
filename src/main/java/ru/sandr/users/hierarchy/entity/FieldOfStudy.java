@@ -10,6 +10,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
+import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -31,7 +32,8 @@ import java.util.Set;
 public class FieldOfStudy extends AuditableEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "fields_of_study_id_seq_gen")
+    @SequenceGenerator(name = "fields_of_study_id_seq_gen", sequenceName = "users.fields_of_study_id_seq", allocationSize = 50)
     @Column(name = "id")
     private Long id;
 

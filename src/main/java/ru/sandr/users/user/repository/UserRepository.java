@@ -37,6 +37,8 @@ public interface UserRepository extends JpaRepository<User, UUID>, JpaSpecificat
     @Query("SELECT u.email AS email, u.username AS username FROM User u WHERE u.email IN :emails AND u.email IS NOT NULL")
     List<EmailUsernameProjection> findAllByEmailIn(@Param("emails") Collection<String> emails);
 
+    Optional<User> findByUsername(String username);
+
     interface EmailUsernameProjection {
         String getEmail();
 

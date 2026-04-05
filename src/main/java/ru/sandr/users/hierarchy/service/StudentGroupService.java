@@ -1,13 +1,13 @@
 package ru.sandr.users.hierarchy.service;
 
 import lombok.RequiredArgsConstructor;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.sandr.users.core.exception.BadRequestException;
-import ru.sandr.users.core.exception.MissedRequiredArgument;
 import ru.sandr.users.core.exception.ObjectNotFoundException;
 import ru.sandr.users.hierarchy.dto.CreateStudentGroupRequest;
 import ru.sandr.users.hierarchy.dto.StudentGroupResponse;
@@ -23,6 +23,7 @@ import ru.sandr.users.user.service.StudentProfileService;
 
 import java.time.LocalDateTime;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -41,16 +42,10 @@ public class StudentGroupService {
         Faculty faculty = findFacultyOrThrow(request.facultyId());
         FieldOfStudy field = findFieldOrThrow(request.fieldOfStudyId());
         ensureFieldBelongsToFaculty(field, faculty);
-        LocalDateTime now = LocalDateTime.now();
-        String actor = currentUsername();
         StudentGroup group = StudentGroup.builder()
                 .name(request.name())
                 .faculty(faculty)
                 .fieldOfStudy(field)
-                .createdAt(now)
-                .createdBy(actor)
-                .updatedAt(now)
-                .updatedBy(actor)
                 .build();
         return studentGroupMapper.toResponse(studentGroupRepository.save(group));
     }
@@ -115,6 +110,54 @@ public class StudentGroupService {
                 ));
     }
 
+    @Transactional(readOnly = true)
+    public Map<String, StudentGroup> findByNamesIn(Collection<String> names) {
+        if (names == null || names.isEmpty()) {
+            return Map.of();
+        }
+        return studentGroupRepository.findAllByNameIn(names).stream()
+                                     .collect(Collectors.toMap(StudentGroup::getName, g -> g, (a, b) -> a));
+    }
+
+    @Transactional
+    public Map<String, StudentGroup> bulkUpsertByNames(Collection<StudentGroupUpsertRow> rows) {
+        if (rows == null || rows.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<String, StudentGroupUpsertRow> uniqueByName = new LinkedHashMap<>();
+        for (StudentGroupUpsertRow row : rows) {
+            if (StringUtils.isBlank(row.name()) || row.faculty() == null || row.fieldOfStudy() == null) {
+                continue;
+            }
+            uniqueByName.put(row.name(), row);
+        }
+        if (uniqueByName.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<String, StudentGroup> groupsByName = new LinkedHashMap<>(findByNamesIn(uniqueByName.keySet()));
+        for (StudentGroupUpsertRow row : uniqueByName.values()) {
+            Faculty faculty = row.faculty();
+            FieldOfStudy field = row.fieldOfStudy();
+            StudentGroup existing = groupsByName.get(row.name());
+            if (existing != null) {
+                existing.setFaculty(faculty);
+                existing.setFieldOfStudy(field);
+            } else {
+                StudentGroup created = StudentGroup.builder()
+                                                   .name(row.name())
+                                                   .faculty(faculty)
+                                                   .fieldOfStudy(field)
+                                                   .build();
+                groupsByName.put(row.name(), created);
+            }
+        }
+
+        studentGroupRepository.saveAll(groupsByName.values());
+        return groupsByName;
+    }
+
     private StudentGroup findGroupOrThrow(Long id) {
         return studentGroupRepository.findById(id)
                 .orElseThrow(() -> new ObjectNotFoundException(
@@ -151,5 +194,8 @@ public class StudentGroupService {
     private String currentUsername() {
         var auth = SecurityContextHolder.getContext().getAuthentication();
         return (auth != null && auth.isAuthenticated()) ? auth.getName() : "system";
+    }
+
+    public record StudentGroupUpsertRow(String name, Faculty faculty, FieldOfStudy fieldOfStudy) {
     }
 }

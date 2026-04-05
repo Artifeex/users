@@ -61,7 +61,7 @@ public class ExcelStreamingParser {
 
         @Override
         public void endRow(int rowNum) {
-            if (rowNum > 0) { // row 0 is the header
+            if (rowNum > 0 && !isBlankRow(currentRow)) { // row 0 is the header
                 rowHandler.handleRow(rowNum, currentRow.toArray(new String[0]));
             }
         }
@@ -82,5 +82,21 @@ public class ExcelStreamingParser {
             currentRow.add("");
         }
         currentRow.set(col, formattedValue != null ? formattedValue.trim() : "");
+    }
+
+    /**
+     * Проверяет, является ли собранная строка абсолютно пустой.
+     * Возвращает true, если список пуст или содержит только null/пустые строки.
+     */
+    private static boolean isBlankRow(List<String> row) {
+        if (row.isEmpty()) {
+            return true;
+        }
+        for (String cellValue : row) {
+            if (cellValue != null && !cellValue.isBlank()) {
+                return false; // Нашли хотя бы одно непустое значение
+            }
+        }
+        return true;
     }
 }

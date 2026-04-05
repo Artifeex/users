@@ -2,6 +2,7 @@ package ru.sandr.users.hierarchy.service;
 
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -14,12 +15,15 @@ import ru.sandr.users.hierarchy.dto.CreateDepartmentRequest;
 import ru.sandr.users.hierarchy.dto.DepartmentResponse;
 import ru.sandr.users.hierarchy.dto.UpdateDepartmentRequest;
 import ru.sandr.users.hierarchy.entity.Department;
+import ru.sandr.users.hierarchy.entity.Faculty;
 import ru.sandr.users.hierarchy.mapper.DepartmentMapper;
 import ru.sandr.users.hierarchy.repository.DepartmentRepository;
 import ru.sandr.users.hierarchy.repository.FacultyRepository;
 import ru.sandr.users.user.service.TeacherProfileService;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -117,5 +121,52 @@ public class DepartmentService {
                 DepartmentRepository.DepartmentProjection::getName,
                 DepartmentRepository.DepartmentProjection::getId
         ));
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Department> findByNamesIn(Collection<String> names) {
+        if (CollectionUtils.isEmpty(names)) {
+            return Map.of();
+        }
+        return departmentRepository.findAllByNameIn(names).stream()
+                                   .collect(Collectors.toMap(Department::getName, d -> d, (a, b) -> a));
+    }
+
+    @Transactional
+    public Map<String, Department> bulkUpsertByNames(Collection<DepartmentUpsertRow> rows) {
+        if (CollectionUtils.isEmpty(rows)) {
+            return Map.of();
+        }
+
+        Map<String, DepartmentUpsertRow> uniqueByName = new LinkedHashMap<>();
+        for (DepartmentUpsertRow row : rows) {
+            if (StringUtils.isBlank(row.name()) || row.faculty() == null) {
+                continue;
+            }
+            uniqueByName.put(row.name(), row);
+        }
+        if (uniqueByName.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<String, Department> departmentsByName = new LinkedHashMap<>(findByNamesIn(uniqueByName.keySet()));
+        for (DepartmentUpsertRow row : uniqueByName.values()) {
+            Department existing = departmentsByName.get(row.name());
+            if (existing != null) {
+                existing.setFaculty(row.faculty());
+            } else {
+                Department created = Department.builder()
+                                               .name(row.name())
+                                               .faculty(row.faculty())
+                                               .build();
+                departmentsByName.put(row.name(), created);
+            }
+        }
+
+        departmentRepository.saveAll(departmentsByName.values());
+        return departmentsByName;
+    }
+
+    public record DepartmentUpsertRow(String name, Faculty faculty) {
     }
 }

@@ -20,12 +20,12 @@ public class ImportController {
 
     @PostMapping("/hierarchy/structure")
     public ImportResultResponse importStructure(@RequestParam MultipartFile file) {
-
+        return hierarchyImportService.importStructure(file);
     }
 
     @PostMapping("/hierarchy/departments")
     public ImportResultResponse importDepartments(@RequestParam MultipartFile file) {
-
+        return hierarchyImportService.importDepartments(file);
     }
 
     @PostMapping("/users/students")

@@ -12,6 +12,8 @@ public interface DepartmentRepository extends JpaRepository<Department, Long> {
 
     boolean existsByFaculty_Id(Long facultyId);
 
+    List<Department> findAllByNameIn(Collection<String> names);
+
     @Query("SELECT d.name as name, d.id as id FROM Department d where d.name IN :departmentNames")
     List<DepartmentProjection> findByDepartmentNameIn(@Param("departmentNames") Collection<String> departmentNames);
 

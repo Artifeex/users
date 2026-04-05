@@ -17,7 +17,7 @@ public class OutboxSenderService {
 
     private final OutboxMessageRepository outboxMessageRepository;
 
-    @Scheduled(fixedDelayString = "${outbox.poll-interval:2000}")
+    //@Scheduled(fixedDelayString = "${outbox.poll-interval:2000}")
     @SchedulerLock(name = "OutboxSenderService_sendOutboxMessages",
             lockAtLeastFor = "1s", // Для предотвращения потенциального рассинхронна по времени. Когда задача будет завершена, то при установке lock_until, если задача была завершена быстрее времени, указанного в lockAtLeastFor, то запишется NOW() + lockAtLeastFor
             lockAtMostFor = "5m" // На случай падений пода, чтобы блокировка рано или поздно освободилась

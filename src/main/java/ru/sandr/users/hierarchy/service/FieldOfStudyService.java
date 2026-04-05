@@ -1,6 +1,7 @@
 package ru.sandr.users.hierarchy.service;
 
 import lombok.RequiredArgsConstructor;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -12,6 +13,7 @@ import ru.sandr.users.core.exception.ObjectNotFoundException;
 import ru.sandr.users.hierarchy.dto.CreateFieldOfStudyRequest;
 import ru.sandr.users.hierarchy.dto.FieldOfStudyResponse;
 import ru.sandr.users.hierarchy.dto.UpdateFieldOfStudyRequest;
+import ru.sandr.users.hierarchy.entity.Faculty;
 import ru.sandr.users.hierarchy.entity.FieldOfStudy;
 import ru.sandr.users.hierarchy.mapper.FieldOfStudyMapper;
 import ru.sandr.users.hierarchy.repository.FacultyRepository;
@@ -19,8 +21,7 @@ import ru.sandr.users.hierarchy.repository.FieldOfStudyRepository;
 import ru.sandr.users.hierarchy.repository.StudentGroupRepository;
 
 import java.time.LocalDateTime;
-import java.util.Collection;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -102,6 +103,53 @@ public class FieldOfStudyService {
         fieldOfStudyRepository.deleteById(id);
     }
 
+    @Transactional(readOnly = true)
+    public Map<String, FieldOfStudy> findByNamesIn(Collection<String> names) {
+        if (names == null || names.isEmpty()) {
+            return Map.of();
+        }
+        return fieldOfStudyRepository.findAllByNameIn(names).stream()
+                                     .collect(Collectors.toMap(FieldOfStudy::getName, f -> f, (a, b) -> a));
+    }
+
+    @Transactional
+    public Map<String, FieldOfStudy> bulkUpsertByNames(Collection<FieldOfStudyUpsertRow> rows) {
+        if (rows == null || rows.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<String, Faculty> facultyByFieldOfStudyName = new HashMap<>();
+        for (FieldOfStudyUpsertRow row : rows) {
+            if (StringUtils.isBlank(row.name()) || row.faculty() == null) {
+                continue;
+            }
+            facultyByFieldOfStudyName.put(row.name(), row.faculty());
+        }
+        if (facultyByFieldOfStudyName.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<String, FieldOfStudy> fieldByName = findByNamesIn(facultyByFieldOfStudyName.keySet());
+        for (Map.Entry<String, Faculty> entry : facultyByFieldOfStudyName.entrySet()) {
+            String fieldName = entry.getKey();
+            Faculty faculty = entry.getValue();
+
+            FieldOfStudy existing = fieldByName.get(fieldName);
+            if (existing != null) {
+                existing.setFaculty(faculty);
+            } else {
+                FieldOfStudy created = FieldOfStudy.builder()
+                                                   .name(fieldName)
+                                                   .faculty(faculty)
+                                                   .build();
+                fieldByName.put(fieldName, created);
+            }
+        }
+
+        fieldOfStudyRepository.saveAll(fieldByName.values());
+        return fieldByName;
+    }
+
     private FieldOfStudy findFieldOrThrow(Long id) {
         return fieldOfStudyRepository.findById(id)
                 .orElseThrow(() -> new ObjectNotFoundException(
@@ -113,5 +161,8 @@ public class FieldOfStudyService {
     private String currentUsername() {
         var auth = SecurityContextHolder.getContext().getAuthentication();
         return (auth != null && auth.isAuthenticated()) ? auth.getName() : "system";
+    }
+
+    public record FieldOfStudyUpsertRow(String name, Faculty faculty) {
     }
 }

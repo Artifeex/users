@@ -1,14 +1,13 @@
 package ru.sandr.users.hierarchy.service;
 
 import lombok.RequiredArgsConstructor;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.sandr.users.core.exception.BadRequestException;
-import ru.sandr.users.core.exception.ConflictException;
-import ru.sandr.users.core.exception.MissedRequiredArgument;
 import ru.sandr.users.core.exception.ObjectNotFoundException;
 import ru.sandr.users.hierarchy.dto.CreateFacultyRequest;
 import ru.sandr.users.hierarchy.dto.FacultyResponse;
@@ -22,6 +21,7 @@ import ru.sandr.users.hierarchy.repository.StudentGroupRepository;
 
 import java.time.LocalDateTime;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -89,6 +89,42 @@ public class FacultyService {
         facultyRepository.deleteById(id);
     }
 
+    @Transactional(readOnly = true)
+    public Map<String, Faculty> findByNamesIn(Collection<String> names) {
+        if (names == null || names.isEmpty()) {
+            return Map.of();
+        }
+        return facultyRepository.findAllByNameIn(names).stream()
+                                .collect(Collectors.toMap(Faculty::getName, f -> f, (a, b) -> a));
+    }
+
+    @Transactional
+    public Map<String, Faculty> bulkUpsertByNames(Collection<String> names) {
+        if (names == null || names.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<String, Faculty> facultyByName = new LinkedHashMap<>(findByNamesIn(names));
+        boolean hasNew = false;
+        for (String name : names) {
+            if (StringUtils.isBlank(name) || facultyByName.containsKey(name)) {
+                continue;
+            }
+            Faculty created = Faculty.builder()
+                                     .name(name)
+                                     .shortName(buildFacultyShortName(name))
+                                     .build();
+            facultyByName.put(name, created);
+            hasNew = true;
+        }
+
+        if (hasNew) {
+            facultyRepository.saveAll(facultyByName.values());
+        }
+
+        return facultyByName;
+    }
+
     private Faculty findFacultyOrThrow(Long id) {
         return facultyRepository.findById(id)
                 .orElseThrow(() -> new ObjectNotFoundException("FACULTY_NOT_FOUND", "Faculty not found: " + id));
@@ -97,5 +133,13 @@ public class FacultyService {
     private String currentUsername() {
         var auth = SecurityContextHolder.getContext().getAuthentication();
         return (auth != null && auth.isAuthenticated()) ? auth.getName() : "system";
+    }
+
+    private String buildFacultyShortName(String fullName) {
+        String normalized = fullName.trim();
+        if (normalized.length() <= 50) {
+            return normalized;
+        }
+        return normalized.substring(0, 50);
     }
 }

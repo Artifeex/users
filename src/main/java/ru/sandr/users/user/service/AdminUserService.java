@@ -188,6 +188,7 @@ public class AdminUserService {
         return userMapper.toResponse(userRepository.save(updatedUser));
     }
 
+
     private void updateDepartment(UUID id, UpdateUserByAdminRequest request) {
         var department = departmentRepository.findById(request.departmentId())
                                              .orElseThrow(() -> new ObjectNotFoundException(
@@ -629,5 +630,13 @@ public class AdminUserService {
     private String currentUsername() {
         var auth = SecurityContextHolder.getContext().getAuthentication();
         return (auth != null && auth.isAuthenticated()) ? auth.getName() : "system";
+    }
+
+    private User findUserOrThrow(UUID id) {
+        return userRepository.findById(id)
+                             .orElseThrow(() -> new ObjectNotFoundException(
+                                     "USER_NOT_FOUND",
+                                     "User with id " + id + "not found"
+                             ));
     }
 }
