@@ -35,6 +35,6 @@ public class ImportController {
 
     @PostMapping("/users/teachers")
     public ImportResultResponse importTeachers(@RequestParam MultipartFile file) {
-
+        return userImportService.importTeachers(file);
     }
 }

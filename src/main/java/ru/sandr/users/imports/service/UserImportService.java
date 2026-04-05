@@ -97,6 +97,58 @@ public class UserImportService {
         return new ImportResultResponse(imported[0]);
     }
 
+    /**
+     * Type 4 - Teachers.
+     * Columns: [0] Department name, [1] Teacher ID (username), [2] Last name, [3] First name,
+     * [4] Middle name (opt), [5] Email, [6] Activity flag.
+     * <p>
+     * Department existence checks use batched IN queries - never loads all departments at once.
+     */
+    @Transactional
+    public ImportResultResponse importTeachers(MultipartFile file) {
+        validateImportTeachersFile(file);
+
+        int[] imported = {0};
+        List<TeacherImportPendingRow> batch = new ArrayList<>(BATCH_SIZE);
+
+        try {
+            parser.parse(
+                    file.getInputStream(), (rowIndex, cells) -> {
+                        String departmentName = cell(cells, 0);
+                        String username = cell(cells, 1);
+                        String lastName = cell(cells, 2);
+                        String firstName = cell(cells, 3);
+                        String middleName = cell(cells, 4);
+                        String email = cell(cells, 5);
+                        String activeFlag = cell(cells, 6);
+
+                        batch.add(TeacherImportPendingRow.builder()
+                                                         .departmentName(departmentName)
+                                                         .username(username)
+                                                         .lastName(lastName)
+                                                         .firstName(firstName)
+                                                         .middleName(middleName)
+                                                         .email(email)
+                                                         .active(parseActiveFlag(activeFlag))
+                                                         .build()
+                        );
+
+                        if (batch.size() >= BATCH_SIZE) {
+                            imported[0] += flushTeacherImportBatch(batch);
+                        }
+                    }
+            );
+        } catch (IOException e) {
+            throw new BadRequestException("FILE_READ_ERROR", "Cannot read uploaded file");
+        }
+
+        if (!batch.isEmpty()) {
+            imported[0] += flushTeacherImportBatch(batch);
+        }
+
+        return new ImportResultResponse(imported[0]);
+    }
+
     private void validateImportStudentsFile(MultipartFile file) {
         List<ImportRowError> errors = new ArrayList<>();
         List<PendingStudentRow> buffer = new ArrayList<>(BATCH_SIZE);
@@ -123,6 +175,39 @@ public class UserImportService {
 
         if (!buffer.isEmpty()) {
             flushStudentValidationBuffer(buffer, errors);
+        }
+
+        if (!errors.isEmpty()) {
+            throw new ImportValidationException(errors);
+        }
+    }
+
+    private void validateImportTeachersFile(MultipartFile file) {
+        List<ImportRowError> errors = new ArrayList<>();
+        List<PendingTeacherRow> buffer = new ArrayList<>(BATCH_SIZE);
+
+        try {
+            parser.parse(
+                    file.getInputStream(), (rowIndex, cells) -> {
+                        if (rowIndex == 0) {
+                            return;
+                        }
+                        if (errors.size() >= maxImportErrors) {
+                            return;
+                        }
+                        buffer.add(new PendingTeacherRow(rowIndex, cells));
+                        if (buffer.size() >= BATCH_SIZE) {
+                            flushTeacherValidationBuffer(buffer, errors);
+                            buffer.clear();
+                        }
+                    }
+            );
+        } catch (IOException e) {
+            throw new BadRequestException("FILE_READ_ERROR", "Cannot read uploaded file");
+        }
+
+        if (!buffer.isEmpty()) {
+            flushTeacherValidationBuffer(buffer, errors);
         }
 
         if (!errors.isEmpty()) {
@@ -217,6 +302,88 @@ public class UserImportService {
         }
     }
 
+    private void flushTeacherValidationBuffer(List<PendingTeacherRow> buffer, List<ImportRowError> errors) {
+        if (buffer.isEmpty() || errors.size() >= maxImportErrors) {
+            return;
+        }
+
+        Set<String> departmentNames = new HashSet<>();
+        Set<String> emails = new HashSet<>();
+        for (PendingTeacherRow pr : buffer) {
+            String[] cells = pr.cells();
+            String departmentCell = cell(cells, 0);
+            if (!departmentCell.isBlank()) {
+                departmentNames.add(departmentCell);
+            }
+            String emailCell = cell(cells, 5);
+            if (!emailCell.isBlank()) {
+                emails.add(emailCell);
+            }
+        }
+
+        Map<String, Long> departmentIdByDepartmentName = departmentService.findDepartmentIdsByNamesIs(departmentNames);
+        Map<String, String> usernameByEmail = adminUserService.findUsernameByEmailIn(emails);
+
+        for (PendingTeacherRow row : buffer) {
+            if (errors.size() >= maxImportErrors) {
+                break;
+            }
+
+            String[] cells = row.cells();
+            int displayRow = row.rowIndex() + 1;
+
+            String departmentName = cell(cells, 0);
+            String username = cell(cells, 1);
+            String lastName = cell(cells, 2);
+            String firstName = cell(cells, 3);
+            String email = cell(cells, 5);
+            String activeFlag = cell(cells, 6);
+
+            if (departmentName.isBlank()) {
+                errors.add(new ImportRowError(displayRow, "Department", "Required field is blank"));
+            } else if (!departmentIdByDepartmentName.containsKey(departmentName)) {
+                errors.add(new ImportRowError(displayRow, "Department", "Department not found: " + departmentName));
+            }
+
+            if (username.isBlank()) {
+                errors.add(new ImportRowError(displayRow, "Teacher ID", "Required field is blank"));
+            }
+
+            if (lastName.isBlank()) {
+                errors.add(new ImportRowError(displayRow, "Last name", "Required field is blank"));
+            }
+
+            if (firstName.isBlank()) {
+                errors.add(new ImportRowError(displayRow, "First name", "Required field is blank"));
+            }
+
+            if (email.isBlank()) {
+                errors.add(new ImportRowError(displayRow, "Email", "Required field is blank"));
+            }
+//                        else if (!EMAIL_PATTERN.matcher(email).matches()) {
+//                errors.add(new ImportRowError(displayRow, "Email", "Invalid email format"));
+//            }
+
+            if (!email.isBlank()) {
+                String ownerInDb = usernameByEmail.get(email);
+                if (ownerInDb != null && !username.isBlank() && !ownerInDb.equals(username)) {
+                    errors.add(new ImportRowError(
+                            displayRow,
+                            "Email",
+                            "Email already in use by another user: " + email
+                    ));
+                }
+            }
+
+            if (!isValidActiveFlag(activeFlag)) {
+                errors.add(new ImportRowError(
+                        displayRow, "Activity flag",
+                        "Invalid value; expected: 1/0/true/false/yes/no"
+                ));
+            }
+        }
+    }
+
     private int flushStudentImportBatch(List<StudentImportPendingRow> batch) {
         Set<String> groupNames = batch.stream()
                                       .map(StudentImportPendingRow::groupName)
@@ -249,7 +416,36 @@ public class UserImportService {
         return n;
     }
 
+    private int flushTeacherImportBatch(List<TeacherImportPendingRow> batch) {
+        Set<String> departmentNames = batch.stream()
+                                           .map(TeacherImportPendingRow::departmentName)
+                                           .filter(StringUtils::isNotBlank)
+                                           .collect(Collectors.toSet());
+        Map<String, Long> departmentIdByDepartmentName = departmentService.findDepartmentIdsByNamesIs(departmentNames);
+
+        List<TeacherImportRow> rows = new ArrayList<>(batch.size());
+        for (TeacherImportPendingRow p : batch) {
+            Long departmentId = departmentIdByDepartmentName.get(p.departmentName());
+            rows.add(new TeacherImportRow(
+                    p.username(),
+                    p.email(),
+                    p.firstName(),
+                    p.lastName(),
+                    p.middleName(),
+                    p.active(),
+                    departmentId
+            ));
+        }
+
+        int n = adminUserService.bulkUpsertTeachers(rows);
+        batch.clear();
+        return n;
+    }
+
     private record PendingStudentRow(int rowIndex, String[] cells) {
+    }
+
+    private record PendingTeacherRow(int rowIndex, String[] cells) {
     }
 
     @Builder
@@ -264,7 +460,19 @@ public class UserImportService {
             String departmentName
     ) {
     }
-    
+
+    @Builder
+    private record TeacherImportPendingRow(
+            String username,
+            String email,
+            String firstName,
+            String lastName,
+            String middleName,
+            boolean active,
+            String departmentName
+    ) {
+    }
+
 
     private static String cell(String[] cells, int index) {
         return (cells.length > index && cells[index] != null) ? cells[index] : "";

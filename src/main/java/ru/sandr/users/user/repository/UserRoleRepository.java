@@ -21,5 +21,12 @@ public interface UserRoleRepository extends JpaRepository<UserRole, UserRoleId> 
             WHERE ur.role.name = 'ROLE_STUDENT' and ur.user.username IN :usernames
             """)
     Set<UUID> findUserIdsWithStudentRoleByUsernameIn(@Param("usernames") Collection<String> usernames);
+
+    @Query("""
+            SELECT ur.user.id
+            FROM UserRole ur
+            WHERE ur.role.name = 'ROLE_TEACHER' and ur.user.username IN :usernames
+            """)
+    Set<UUID> findUserIdsWithTeacherRoleByUsernameIn(@Param("usernames") Collection<String> usernames);
 }
 
