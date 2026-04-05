@@ -95,21 +95,6 @@ public class DepartmentService {
         departmentRepository.deleteById(id);
     }
 
-    // ── Import helpers ────────────────────────────────────────────────────────
-
-    /**
-     * Returns name → id via scalar projection — no entity objects, no session tracking.
-     * Used by UserImportService to validate and resolve teacher department names.
-     */
-    @Transactional(readOnly = true)
-    public Map<String, Long> findAllAsNameMap() {
-        return departmentRepository.findAllNameIdProjections().stream()
-                                   .collect(Collectors.toMap(
-                                           DepartmentRepository.NameIdProjection::getName,
-                                           DepartmentRepository.NameIdProjection::getId,
-                                           (a, b) -> a
-                                   ));
-    }
 
     /**
      * Returns "facultyName|deptName" → deptId via scalar projection.

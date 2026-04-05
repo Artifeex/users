@@ -14,6 +14,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import ru.sandr.users.core.entity.AuditableEntity;
 import ru.sandr.users.hierarchy.entity.Department;
 import ru.sandr.users.hierarchy.entity.StudentGroup;
 
@@ -26,7 +27,7 @@ import java.util.UUID;
 @Builder
 @Entity
 @Table(name = "student_profiles", schema = "users")
-public class StudentProfile {
+public class StudentProfile extends AuditableEntity {
 
     @Id
     @Column(name = "user_id", columnDefinition = "uuid")

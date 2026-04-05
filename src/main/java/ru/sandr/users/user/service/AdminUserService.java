@@ -91,7 +91,6 @@ public class AdminUserService {
                                     .id(new UserRoleId(savedUser.getId(), role.getId()))
                                     .user(savedUser)
                                     .role(role)
-                                    .createdAt(now)
                                     .build();
         userRoleRepository.save(userRole);
         // Это нужно, поскольку мы будем отдавать на фронт mapping из savedUser
@@ -239,7 +238,6 @@ public class AdminUserService {
                                                 .id(new UserRoleId(user.getId(), role.getId()))
                                                 .user(user)
                                                 .role(role)
-                                                .createdAt(now)
                                                 .build());
             }
         }
@@ -460,7 +458,6 @@ public class AdminUserService {
                                         .id(new UserRoleId(savedUser.getId(), studentRole.getId()))
                                         .user(savedUser)
                                         .role(studentRole)
-                                        .createdAt(now)
                                         .build());
 
         StudentGroup group = studentGroupRepository.getReferenceById(row.groupId());
@@ -526,7 +523,6 @@ public class AdminUserService {
                                             .id(new UserRoleId(user.getId(), studentRole.getId()))
                                             .user(user)
                                             .role(studentRole)
-                                            .createdAt(now)
                                             .build());
         }
     }
@@ -585,7 +581,6 @@ public class AdminUserService {
                                         .id(new UserRoleId(savedUser.getId(), teacherRole.getId()))
                                         .user(savedUser)
                                         .role(teacherRole)
-                                        .createdAt(now)
                                         .build());
 
         teacherProfileRepository.save(TeacherProfile.builder()
@@ -636,7 +631,6 @@ public class AdminUserService {
                                             .id(new UserRoleId(user.getId(), teacherRole.getId()))
                                             .user(user)
                                             .role(teacherRole)
-                                            .createdAt(now)
                                             .build());
         }
     }

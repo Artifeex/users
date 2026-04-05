@@ -13,6 +13,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import ru.sandr.users.core.entity.AuditableEntity;
 
 import java.time.LocalDateTime;
 
@@ -23,7 +24,7 @@ import java.time.LocalDateTime;
 @Builder
 @Entity
 @Table(name = "users_roles", schema = "users")
-public class UserRole {
+public class UserRole extends AuditableEntity {
 
     @EmbeddedId
     private UserRoleId id;
@@ -38,7 +39,5 @@ public class UserRole {
     @JoinColumn(name = "role_id", nullable = false)
     private Role role;
 
-    @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt;
 }
 
