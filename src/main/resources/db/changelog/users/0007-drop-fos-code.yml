@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 0007-1
+      author: AVSmirnov
+      preConditions:
+        - onFail: MARK_RAN
+        - columnExists:
+            columnName: code
+            tableName: fields_of_study
+            schemaName: users
+      changes:
+        - dropColumn:
+            columnName: code
+            tableName: fields_of_study
+            schemaName: users
