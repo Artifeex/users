@@ -18,8 +18,11 @@ databaseChangeLog:
       file: users/0006-init-shedlock.sql
       relativeToChangelogFile: true
   - include:
-      file: users/0007-drop-fos-code.sql
+      file: users/0007-drop-fos-code.yml
       relativeToChangelogFile: true
   - include:
       file: users/0008-switch-identity-to-sequence.sql
+      relativeToChangelogFile: true
+  - include:
+      file: users/0009-init-teacher-group-access-scopes.sql
       relativeToChangelogFile: true

@@ -1,4 +1,4 @@
-package ru.sandr.users.user.teacheraccess.service;
+package ru.sandr.users.teacheraccess.service;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -12,13 +12,13 @@ import ru.sandr.users.user.dto.RoleName;
 import ru.sandr.users.user.entity.TeacherProfile;
 import ru.sandr.users.user.repository.TeacherProfileRepository;
 import ru.sandr.users.user.repository.UserRoleRepository;
-import ru.sandr.users.user.teacheraccess.dto.ReplaceTeacherGroupAccessRequest;
-import ru.sandr.users.user.teacheraccess.dto.TeacherGroupAccessResponse;
-import ru.sandr.users.user.teacheraccess.dto.TeacherGroupAccessScopeResponse;
-import ru.sandr.users.user.teacheraccess.entity.TeacherGroupAccessScope;
-import ru.sandr.users.user.teacheraccess.entity.TeacherGroupAccessScopeId;
-import ru.sandr.users.user.teacheraccess.entity.TeacherGroupAccessScopeType;
-import ru.sandr.users.user.teacheraccess.repository.TeacherGroupAccessScopeRepository;
+import ru.sandr.users.teacheraccess.dto.ReplaceTeacherGroupAccessRequest;
+import ru.sandr.users.teacheraccess.dto.TeacherGroupAccessResponse;
+import ru.sandr.users.teacheraccess.dto.TeacherGroupAccessScopeResponse;
+import ru.sandr.users.teacheraccess.entity.TeacherGroupAccessScope;
+import ru.sandr.users.teacheraccess.entity.TeacherGroupAccessScopeId;
+import ru.sandr.users.teacheraccess.entity.TeacherGroupAccessScopeType;
+import ru.sandr.users.teacheraccess.repository.TeacherGroupAccessScopeRepository;
 
 import java.util.Comparator;
 import java.util.LinkedHashSet;

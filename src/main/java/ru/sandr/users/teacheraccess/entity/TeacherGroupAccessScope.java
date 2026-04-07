@@ -1,4 +1,4 @@
-package ru.sandr.users.user.teacheraccess.entity;
+package ru.sandr.users.teacheraccess.entity;
 
 import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
@@ -28,7 +28,7 @@ public class TeacherGroupAccessScope extends AuditableEntity {
     private TeacherGroupAccessScopeId id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @MapsId("teacherId")
+    @MapsId("teacherId") // Из EmbeddedId нужно взять поле teacherId и тогда будет связь на teacher
     @JoinColumn(name = "teacher_id", nullable = false)
     private TeacherProfile teacher;
 }

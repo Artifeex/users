@@ -1,4 +1,4 @@
-package ru.sandr.users.user.teacheraccess.controller;
+package ru.sandr.users.teacheraccess.controller;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -8,9 +8,9 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import ru.sandr.users.user.teacheraccess.dto.ReplaceTeacherGroupAccessRequest;
-import ru.sandr.users.user.teacheraccess.dto.TeacherGroupAccessResponse;
-import ru.sandr.users.user.teacheraccess.service.TeacherGroupAccessService;
+import ru.sandr.users.teacheraccess.dto.ReplaceTeacherGroupAccessRequest;
+import ru.sandr.users.teacheraccess.dto.TeacherGroupAccessResponse;
+import ru.sandr.users.teacheraccess.service.TeacherGroupAccessService;
 
 import java.util.UUID;
 

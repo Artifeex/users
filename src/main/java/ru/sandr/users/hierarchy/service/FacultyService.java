@@ -7,8 +7,10 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import ru.sandr.users.core.dto.PageResponse;
 import ru.sandr.users.core.exception.BadRequestException;
 import ru.sandr.users.core.exception.ObjectNotFoundException;
+import ru.sandr.users.core.validation.PageableValidator;
 import ru.sandr.users.hierarchy.dto.CreateFacultyRequest;
 import ru.sandr.users.hierarchy.dto.FacultyResponse;
 import ru.sandr.users.hierarchy.dto.UpdateFacultyRequest;
@@ -35,18 +37,19 @@ public class FacultyService {
     private final StudentGroupRepository studentGroupRepository;
     private final FacultyMapper facultyMapper;
 
+
     @Transactional
     public FacultyResponse create(CreateFacultyRequest request) {
         LocalDateTime now = LocalDateTime.now();
         String actor = currentUsername();
         Faculty faculty = Faculty.builder()
-                .name(request.name())
-                .shortName(request.shortName())
-                .createdAt(now)
-                .createdBy(actor)
-                .updatedAt(now)
-                .updatedBy(actor)
-                .build();
+                                 .name(request.name())
+                                 .shortName(request.shortName())
+                                 .createdAt(now)
+                                 .createdBy(actor)
+                                 .updatedAt(now)
+                                 .updatedBy(actor)
+                                 .build();
         return facultyMapper.toResponse(facultyRepository.save(faculty));
     }
 
@@ -56,8 +59,9 @@ public class FacultyService {
     }
 
     @Transactional(readOnly = true)
-    public Page<FacultyResponse> findAll(Pageable pageable) {
-        return facultyRepository.findAll(pageable).map(facultyMapper::toResponse);
+    public PageResponse<FacultyResponse> findAll(Pageable pageable) {
+        var safePageable = PageableValidator.validateAndMap(pageable, Map.of("name", "name"));
+        return new PageResponse<>(facultyRepository.findAll(safePageable).map(facultyMapper::toResponse));
     }
 
     @Transactional
@@ -127,7 +131,10 @@ public class FacultyService {
 
     private Faculty findFacultyOrThrow(Long id) {
         return facultyRepository.findById(id)
-                .orElseThrow(() -> new ObjectNotFoundException("FACULTY_NOT_FOUND", "Faculty not found: " + id));
+                                .orElseThrow(() -> new ObjectNotFoundException(
+                                        "FACULTY_NOT_FOUND",
+                                        "Faculty not found: " + id
+                                ));
     }
 
     private String currentUsername() {

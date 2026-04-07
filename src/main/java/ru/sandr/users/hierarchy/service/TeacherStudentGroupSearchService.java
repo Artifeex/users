@@ -13,7 +13,7 @@ import ru.sandr.users.hierarchy.dto.StudentGroupResponse;
 import ru.sandr.users.hierarchy.mapper.StudentGroupMapper;
 import ru.sandr.users.hierarchy.repository.StudentGroupRepository;
 import ru.sandr.users.user.repository.TeacherProfileRepository;
-import ru.sandr.users.user.teacheraccess.service.TeacherGroupAccessService;
+import ru.sandr.users.teacheraccess.service.TeacherGroupAccessService;
 
 import java.util.Collection;
 import java.util.List;

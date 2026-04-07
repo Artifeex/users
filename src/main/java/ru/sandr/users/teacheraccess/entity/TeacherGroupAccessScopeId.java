@@ -1,4 +1,4 @@
-package ru.sandr.users.user.teacheraccess.entity;
+package ru.sandr.users.teacheraccess.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;

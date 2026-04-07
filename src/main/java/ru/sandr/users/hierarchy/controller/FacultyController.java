@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import ru.sandr.users.core.dto.PageResponse;
 import ru.sandr.users.hierarchy.dto.CreateFacultyRequest;
 import ru.sandr.users.hierarchy.dto.FacultyResponse;
 import ru.sandr.users.hierarchy.dto.UpdateFacultyRequest;
@@ -39,7 +40,7 @@ public class FacultyController {
     }
 
     @GetMapping
-    public Page<FacultyResponse> findAll(@PageableDefault(size = 20, sort = "name") Pageable pageable) {
+    public PageResponse<FacultyResponse> findAll(@PageableDefault(size = 20, page = 0, sort = "name") Pageable pageable) {
         return facultyService.findAll(pageable);
     }
 

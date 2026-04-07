@@ -1,4 +1,4 @@
-package ru.sandr.users.user.teacheraccess.dto;
+package ru.sandr.users.teacheraccess.dto;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
