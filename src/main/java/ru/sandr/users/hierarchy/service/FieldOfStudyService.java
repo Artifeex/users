@@ -2,14 +2,15 @@ package ru.sandr.users.hierarchy.service;
 
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import ru.sandr.users.core.dto.PageResponse;
 import ru.sandr.users.core.exception.BadRequestException;
 import ru.sandr.users.core.exception.MissedRequiredArgument;
 import ru.sandr.users.core.exception.ObjectNotFoundException;
+import ru.sandr.users.core.validation.PageableValidator;
 import ru.sandr.users.hierarchy.dto.CreateFieldOfStudyRequest;
 import ru.sandr.users.hierarchy.dto.FieldOfStudyResponse;
 import ru.sandr.users.hierarchy.dto.UpdateFieldOfStudyRequest;
@@ -61,8 +62,22 @@ public class FieldOfStudyService {
     }
 
     @Transactional(readOnly = true)
-    public Page<FieldOfStudyResponse> findAll(Pageable pageable) {
-        return fieldOfStudyRepository.findAll(pageable).map(fieldOfStudyMapper::toResponse);
+    public PageResponse<FieldOfStudyResponse> findAll(Pageable pageable) {
+        var safePageable = PageableValidator.validateAndMap(pageable, Map.of("name", "name"));
+        return new PageResponse<>(fieldOfStudyRepository.findAll(safePageable).map(fieldOfStudyMapper::toResponse));
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<FieldOfStudyResponse> findAllByFacultyId(Long facultyId, Pageable pageable) {
+        facultyRepository.findById(facultyId)
+                .orElseThrow(() -> new ObjectNotFoundException(
+                        "FACULTY_NOT_FOUND",
+                        "Faculty not found: " + facultyId
+                ));
+        var safePageable = PageableValidator.validateAndMap(pageable, Map.of("name", "name"));
+        return new PageResponse<>(
+                fieldOfStudyRepository.findAllByFaculty_Id(facultyId, safePageable).map(fieldOfStudyMapper::toResponse)
+        );
     }
 
     @Transactional

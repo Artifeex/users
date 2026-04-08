@@ -18,6 +18,8 @@ public interface StudentGroupRepository extends JpaRepository<StudentGroup, Long
 
     List<StudentGroup> findAllByNameIn(Collection<String> names);
 
+    Page<StudentGroup> findAllByFieldOfStudy_Id(Long fieldOfStudyId, Pageable pageable);
+
     @Query("SELECT sg.name AS name, sg.id AS id FROM StudentGroup sg WHERE sg.name IN :names")
     List<NameIdProjection> findByNameIn(@Param("names") Collection<String> names);
 

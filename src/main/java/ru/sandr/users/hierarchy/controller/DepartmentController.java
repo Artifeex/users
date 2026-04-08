@@ -2,7 +2,6 @@ package ru.sandr.users.hierarchy.controller;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
@@ -15,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import ru.sandr.users.core.dto.PageResponse;
 import ru.sandr.users.hierarchy.dto.CreateDepartmentRequest;
 import ru.sandr.users.hierarchy.dto.DepartmentResponse;
 import ru.sandr.users.hierarchy.dto.UpdateDepartmentRequest;
@@ -39,8 +39,16 @@ public class DepartmentController {
     }
 
     @GetMapping
-    public Page<DepartmentResponse> findAll(@PageableDefault(size = 20, sort = "name") Pageable pageable) {
+    public PageResponse<DepartmentResponse> findAll(@PageableDefault(size = 20, page = 0, sort = "name") Pageable pageable) {
         return departmentService.findAll(pageable);
+    }
+
+    @GetMapping("/by-faculty/{facultyId}")
+    public PageResponse<DepartmentResponse> findAllByFacultyId(
+            @PathVariable Long facultyId,
+            @PageableDefault(size = 20, page = 0, sort = "name") Pageable pageable
+    ) {
+        return departmentService.findAllByFacultyId(facultyId, pageable);
     }
 
     @PatchMapping("/{id}")

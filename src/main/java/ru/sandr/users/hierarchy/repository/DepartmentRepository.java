@@ -1,5 +1,7 @@
 package ru.sandr.users.hierarchy.repository;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -13,6 +15,8 @@ public interface DepartmentRepository extends JpaRepository<Department, Long> {
     boolean existsByFaculty_Id(Long facultyId);
 
     List<Department> findAllByNameIn(Collection<String> names);
+
+    Page<Department> findAllByFaculty_Id(Long facultyId, Pageable pageable);
 
     @Query("SELECT d.name as name, d.id as id FROM Department d where d.name IN :departmentNames")
     List<DepartmentProjection> findByDepartmentNameIn(@Param("departmentNames") Collection<String> departmentNames);

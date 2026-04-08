@@ -3,14 +3,15 @@ package ru.sandr.users.hierarchy.service;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import ru.sandr.users.core.dto.PageResponse;
 import ru.sandr.users.core.exception.BadRequestException;
 import ru.sandr.users.core.exception.MissedRequiredArgument;
 import ru.sandr.users.core.exception.ObjectNotFoundException;
+import ru.sandr.users.core.validation.PageableValidator;
 import ru.sandr.users.hierarchy.dto.CreateDepartmentRequest;
 import ru.sandr.users.hierarchy.dto.DepartmentResponse;
 import ru.sandr.users.hierarchy.dto.UpdateDepartmentRequest;
@@ -63,8 +64,22 @@ public class DepartmentService {
     }
 
     @Transactional(readOnly = true)
-    public Page<DepartmentResponse> findAll(Pageable pageable) {
-        return departmentRepository.findAll(pageable).map(departmentMapper::toResponse);
+    public PageResponse<DepartmentResponse> findAll(Pageable pageable) {
+        var safePageable = PageableValidator.validateAndMap(pageable, Map.of("name", "name"));
+        return new PageResponse<>(departmentRepository.findAll(safePageable).map(departmentMapper::toResponse));
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<DepartmentResponse> findAllByFacultyId(Long facultyId, Pageable pageable) {
+        facultyRepository.findById(facultyId)
+                         .orElseThrow(() -> new ObjectNotFoundException(
+                                 "FACULTY_NOT_FOUND",
+                                 "Faculty not found: " + facultyId
+                         ));
+        var safePageable = PageableValidator.validateAndMap(pageable, Map.of("name", "name"));
+        return new PageResponse<>(
+                departmentRepository.findAllByFaculty_Id(facultyId, safePageable).map(departmentMapper::toResponse)
+        );
     }
 
     @Transactional

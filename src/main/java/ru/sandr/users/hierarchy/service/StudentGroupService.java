@@ -2,13 +2,14 @@ package ru.sandr.users.hierarchy.service;
 
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import ru.sandr.users.core.dto.PageResponse;
 import ru.sandr.users.core.exception.BadRequestException;
 import ru.sandr.users.core.exception.ObjectNotFoundException;
+import ru.sandr.users.core.validation.PageableValidator;
 import ru.sandr.users.hierarchy.dto.CreateStudentGroupRequest;
 import ru.sandr.users.hierarchy.dto.StudentGroupResponse;
 import ru.sandr.users.hierarchy.dto.UpdateStudentGroupRequest;
@@ -56,8 +57,18 @@ public class StudentGroupService {
     }
 
     @Transactional(readOnly = true)
-    public Page<StudentGroupResponse> findAll(Pageable pageable) {
-        return studentGroupRepository.findAll(pageable).map(studentGroupMapper::toResponse);
+    public PageResponse<StudentGroupResponse> findAll(Pageable pageable) {
+        var safePageable = PageableValidator.validateAndMap(pageable, Map.of("name", "name"));
+        return new PageResponse<>(studentGroupRepository.findAll(safePageable).map(studentGroupMapper::toResponse));
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<StudentGroupResponse> findAllByFieldOfStudyId(Long fieldOfStudyId, Pageable pageable) {
+        findFieldOrThrow(fieldOfStudyId);
+        var safePageable = PageableValidator.validateAndMap(pageable, Map.of("name", "name"));
+        return new PageResponse<>(
+                studentGroupRepository.findAllByFieldOfStudy_Id(fieldOfStudyId, safePageable).map(studentGroupMapper::toResponse)
+        );
     }
 
     @Transactional
