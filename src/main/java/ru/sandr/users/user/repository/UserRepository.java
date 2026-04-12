@@ -2,6 +2,7 @@ package ru.sandr.users.user.repository;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import ru.sandr.users.user.entity.User;
@@ -36,6 +37,10 @@ public interface UserRepository extends JpaRepository<User, UUID>, JpaSpecificat
 
     @Query("SELECT u.email AS email, u.username AS username FROM User u WHERE u.email IN :emails AND u.email IS NOT NULL")
     List<EmailUsernameProjection> findAllByEmailIn(@Param("emails") Collection<String> emails);
+
+    @EntityGraph(attributePaths = {"userRoles", "userRoles.role"})
+    @Query("SELECT DISTINCT u FROM User u WHERE u.id IN :ids")
+    List<User> findAllByIdInWithRoles(@Param("ids") Collection<UUID> ids);
 
     Optional<User> findByUsername(String username);
 

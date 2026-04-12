@@ -8,15 +8,18 @@ import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import ru.sandr.users.core.dto.PageResponse;
 import ru.sandr.users.core.exception.ConflictException;
 import ru.sandr.users.core.exception.MissedRequiredArgument;
 import ru.sandr.users.core.exception.ObjectNotFoundException;
+import ru.sandr.users.core.validation.PageableValidator;
 import ru.sandr.users.hierarchy.entity.StudentGroup;
 import ru.sandr.users.hierarchy.repository.DepartmentRepository;
 import ru.sandr.users.hierarchy.repository.StudentGroupRepository;
@@ -346,9 +349,30 @@ public class AdminUserService {
     }
 
     @Transactional(readOnly = true)
-    public Page<UserResponse> searchUsers(UserSearchFilter filter, Pageable pageable) {
+    public PageResponse<UserResponse> searchUsers(UserSearchFilter filter, Pageable pageable) {
         Specification<User> spec = buildSpecification(filter);
-        return userRepository.findAll(spec, pageable).map(userMapper::toResponse);
+        Pageable safetyPageable = PageableValidator.validateAndMap(pageable, Map.of("lastname", "lastname"));
+        Page<User> usersPage = userRepository.findAll(spec, safetyPageable);
+        List<UUID> userIds = usersPage.getContent().stream().map(User::getId).toList();
+        if (userIds.isEmpty()) {
+            return new PageResponse<>(new PageImpl<>(List.of(), safetyPageable, usersPage.getTotalElements()));
+        }
+
+        Map<UUID, User> usersById = userRepository.findAllByIdInWithRoles(userIds)
+                                                  .stream()
+                                                  .collect(Collectors.toMap(
+                                                          User::getId,
+                                                          Function.identity(),
+                                                          (a, b) -> a
+                                                  ));
+
+        List<UserResponse> items = userIds.stream()
+                                          .map(usersById::get)
+                                          .filter(Objects::nonNull)
+                                          .map(userMapper::toResponse)
+                                          .toList();
+
+        return new PageResponse<>(new PageImpl<>(items, safetyPageable, usersPage.getTotalElements()));
     }
 
     private Specification<User> buildSpecification(UserSearchFilter filter) {
@@ -371,7 +395,7 @@ public class AdminUserService {
                 Join<Object, Object> userRoles = root.join("userRoles", JoinType.INNER);
                 Join<Object, Object> role = userRoles.join("role", JoinType.INNER);
                 predicates.add(cb.equal(role.get("name"), filter.role()));
-                query.distinct(true);
+                query.distinct(true); // Это distinct на уровне именно User. Т.е. уникальность гарантируется на уровне пользователя и даже если после join у пользователя будет 2 роли, то это будет все еще один пользователь, а не 2 отдельных записи и объекта!
             }
 
             return cb.and(predicates.toArray(new Predicate[0]));

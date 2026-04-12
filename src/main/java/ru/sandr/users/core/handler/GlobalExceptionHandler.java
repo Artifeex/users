@@ -10,6 +10,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import ru.sandr.users.core.dto.ApiErrorResponse;
 import ru.sandr.users.core.exception.*;
 import ru.sandr.users.imports.dto.ImportValidationErrorResponse;
@@ -87,6 +88,20 @@ public class GlobalExceptionHandler {
         else {
             response.addViolation("body", "Некорректный синтаксис JSON");
         }
+        return response;
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiErrorResponse handleMethodArgumentTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        ApiErrorResponse response = new ApiErrorResponse(
+                "Некорректный тип параметра запроса",
+                "INVALID_ARGUMENT_TYPE"
+        );
+
+        String fieldName = ex.getName() != null ? ex.getName() : "argument";
+        String expectedType = ex.getRequiredType() != null ? ex.getRequiredType().getSimpleName() : "unknown";
+        response.addViolation(fieldName, "Неверный тип данных. Ожидался: " + expectedType);
         return response;
     }
 

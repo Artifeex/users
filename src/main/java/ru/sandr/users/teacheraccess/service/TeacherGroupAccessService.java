@@ -1,13 +1,17 @@
 package ru.sandr.users.teacheraccess.service;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import ru.sandr.users.core.dto.PageResponse;
 import ru.sandr.users.core.exception.BadRequestException;
 import ru.sandr.users.core.exception.ObjectNotFoundException;
+import ru.sandr.users.core.validation.PageableValidator;
 import ru.sandr.users.hierarchy.service.FacultyService;
 import ru.sandr.users.hierarchy.service.FieldOfStudyService;
 import ru.sandr.users.hierarchy.service.StudentGroupService;
+import ru.sandr.users.teacheraccess.dto.TeacherGroupAccessScopeRequest;
 import ru.sandr.users.user.dto.RoleName;
 import ru.sandr.users.user.entity.TeacherProfile;
 import ru.sandr.users.user.repository.TeacherProfileRepository;
@@ -23,6 +27,7 @@ import ru.sandr.users.teacheraccess.repository.TeacherGroupAccessScopeRepository
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -36,6 +41,41 @@ public class TeacherGroupAccessService {
     private final StudentGroupService studentGroupService;
     private final FieldOfStudyService fieldOfStudyService;
     private final FacultyService facultyService;
+
+    @Transactional
+    public TeacherGroupAccessScopeResponse addTeacherScope(UUID teacherId, TeacherGroupAccessScopeRequest request) {
+        TeacherProfile teacher = ensureTeacherIsValid(teacherId);
+        validateScopeExists(request.scopeType(), request.scopeId());
+
+        TeacherGroupAccessScopeId scopeId = new TeacherGroupAccessScopeId(teacherId, request.scopeType(), request.scopeId());
+        if (teacherGroupAccessScopeRepository.existsById(scopeId)) {
+            throw new BadRequestException(
+                    "TEACHER_GROUP_ACCESS_SCOPE_EXISTS",
+                    "Teacher scope already exists for teacherId=%s, scopeType=%s, scopeId=%s"
+                            .formatted(teacherId, request.scopeType(), request.scopeId())
+            );
+        }
+
+        TeacherGroupAccessScope saved = teacherGroupAccessScopeRepository.save(
+                TeacherGroupAccessScope.builder()
+                                       .id(scopeId)
+                                       .teacher(teacher)
+                                       .build()
+        );
+        return toScopeResponse(saved);
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<TeacherGroupAccessScopeResponse> findTeacherScopesByType(UUID teacherId,
+                                                                                  TeacherGroupAccessScopeType scopeType,
+                                                                                  Pageable pageable) {
+        ensureTeacherIsValid(teacherId);
+        Pageable safePageable = PageableValidator.validateAndMap(pageable, Map.of("scopeId", "id.scopeId"));
+        return new PageResponse<>(
+                teacherGroupAccessScopeRepository.findAllByTeacher_IdAndId_ScopeType(teacherId, scopeType, safePageable)
+                                                 .map(this::toScopeResponse)
+        );
+    }
 
     @Transactional(readOnly = true)
     public TeacherGroupAccessResponse getTeacherScopes(UUID teacherId) {
@@ -111,14 +151,18 @@ public class TeacherGroupAccessService {
 
     private TeacherGroupAccessResponse buildResponse(UUID teacherId, List<TeacherGroupAccessScope> scopes) {
         List<TeacherGroupAccessScopeResponse> items = scopes.stream()
-                                                            .map(scope -> new TeacherGroupAccessScopeResponse(
-                                                                    scope.getId().getScopeType(),
-                                                                    scope.getId().getScopeId()
-                                                            ))
+                                                            .map(this::toScopeResponse)
                                                             .sorted(Comparator.comparing(TeacherGroupAccessScopeResponse::scopeType)
                                                                               .thenComparing(TeacherGroupAccessScopeResponse::scopeId))
                                                             .toList();
         return new TeacherGroupAccessResponse(teacherId, items);
+    }
+
+    private TeacherGroupAccessScopeResponse toScopeResponse(TeacherGroupAccessScope scope) {
+        return new TeacherGroupAccessScopeResponse(
+                scope.getId().getScopeType(),
+                scope.getId().getScopeId()
+        );
     }
 
     public record TeacherScopeIds(Set<Long> groupIds, Set<Long> fieldOfStudyIds, Set<Long> facultyIds) {

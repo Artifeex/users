@@ -2,7 +2,6 @@ package ru.sandr.users.user.controller;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
@@ -16,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import ru.sandr.users.core.dto.PageResponse;
 import ru.sandr.users.user.dto.CreateUserRequest;
 import ru.sandr.users.user.dto.UpdateUserByAdminRequest;
 import ru.sandr.users.user.dto.UserResponse;
@@ -50,8 +50,8 @@ public class AdminController {
     }
 
     @GetMapping
-    public Page<UserResponse> searchUsers(@ModelAttribute UserSearchFilter filter,
-                                          @PageableDefault(size = 20, sort = "lastName") Pageable pageable) {
+    public PageResponse<UserResponse> searchUsers(@ModelAttribute UserSearchFilter filter,
+                                                  @PageableDefault(size = 20, page = 0, sort = "lastName") Pageable pageable) {
         return adminUserService.searchUsers(filter, pageable);
     }
 
