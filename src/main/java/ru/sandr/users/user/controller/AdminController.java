@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import ru.sandr.users.core.dto.PageResponse;
+import ru.sandr.users.user.dto.AdminUserSearchResponse;
 import ru.sandr.users.user.dto.CreateUserRequest;
 import ru.sandr.users.user.dto.UpdateUserByAdminRequest;
 import ru.sandr.users.user.dto.UserResponse;
@@ -50,8 +51,8 @@ public class AdminController {
     }
 
     @GetMapping
-    public PageResponse<UserResponse> searchUsers(@ModelAttribute UserSearchFilter filter,
-                                                  @PageableDefault(size = 20, page = 0, sort = "lastName") Pageable pageable) {
+    public PageResponse<AdminUserSearchResponse> searchUsers(@ModelAttribute UserSearchFilter filter,
+                                                             @PageableDefault(size = 20, page = 0, sort = "lastName") Pageable pageable) {
         return adminUserService.searchUsers(filter, pageable);
     }
 

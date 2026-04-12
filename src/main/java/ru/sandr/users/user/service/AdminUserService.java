@@ -349,9 +349,9 @@ public class AdminUserService {
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<UserResponse> searchUsers(UserSearchFilter filter, Pageable pageable) {
+    public PageResponse<AdminUserSearchResponse> searchUsers(UserSearchFilter filter, Pageable pageable) {
         Specification<User> spec = buildSpecification(filter);
-        Pageable safetyPageable = PageableValidator.validateAndMap(pageable, Map.of("lastname", "lastname"));
+        Pageable safetyPageable = PageableValidator.validateAndMap(pageable, Map.of("lastName", "lastName"));
         Page<User> usersPage = userRepository.findAll(spec, safetyPageable);
         List<UUID> userIds = usersPage.getContent().stream().map(User::getId).toList();
         if (userIds.isEmpty()) {
@@ -366,11 +366,11 @@ public class AdminUserService {
                                                           (a, b) -> a
                                                   ));
 
-        List<UserResponse> items = userIds.stream()
-                                          .map(usersById::get)
-                                          .filter(Objects::nonNull)
-                                          .map(userMapper::toResponse)
-                                          .toList();
+        List<AdminUserSearchResponse> items = userIds.stream()
+                                                     .map(usersById::get)
+                                                     .filter(Objects::nonNull)
+                                                     .map(userMapper::toAdminSearchResponse)
+                                                     .toList();
 
         return new PageResponse<>(new PageImpl<>(items, safetyPageable, usersPage.getTotalElements()));
     }
