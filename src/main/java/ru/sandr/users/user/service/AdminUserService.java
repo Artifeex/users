@@ -349,6 +349,16 @@ public class AdminUserService {
     }
 
     @Transactional(readOnly = true)
+    public AdminUserDetailsResponse getUserDetails(UUID id) {
+        User user = userRepository.findByIdWithDetails(id)
+                                  .orElseThrow(() -> new ObjectNotFoundException(
+                                          "USER_NOT_FOUND",
+                                          "User with id " + id + " not found"
+                                  ));
+        return userMapper.toAdminDetailsResponse(user);
+    }
+
+    @Transactional(readOnly = true)
     public PageResponse<AdminUserSearchResponse> searchUsers(UserSearchFilter filter, Pageable pageable) {
         Specification<User> spec = buildSpecification(filter);
         Pageable safetyPageable = PageableValidator.validateAndMap(pageable, Map.of("lastName", "lastName"));

@@ -1,0 +1,36 @@
+services:
+  users-db:
+    image: postgres:16-alpine
+    container_name: users-db
+    environment:
+      POSTGRES_DB: users
+      POSTGRES_USER: users
+      POSTGRES_PASSWORD: users
+    ports:
+      - "5433:5432"
+    volumes:
+      - users-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U users -d users"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  users-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: users-app
+    depends_on:
+      users-db:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://users-db:5432/users
+      SPRING_DATASOURCE_USERNAME: users
+      SPRING_DATASOURCE_PASSWORD: users
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+volumes:
+  users-db-data:

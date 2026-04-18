@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import ru.sandr.users.core.dto.PageResponse;
+import ru.sandr.users.user.dto.AdminUserDetailsResponse;
 import ru.sandr.users.user.dto.AdminUserSearchResponse;
 import ru.sandr.users.user.dto.CreateUserRequest;
 import ru.sandr.users.user.dto.UpdateUserByAdminRequest;
@@ -48,6 +49,11 @@ public class AdminController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteUser(@PathVariable UUID id) {
         adminUserService.deleteUser(id);
+    }
+
+    @GetMapping("/{id}")
+    public AdminUserDetailsResponse getUserDetails(@PathVariable UUID id) {
+        return adminUserService.getUserDetails(id);
     }
 
     @GetMapping
