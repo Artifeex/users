@@ -5,6 +5,8 @@ WORKDIR /workspace
 COPY gradlew settings.gradle.kts build.gradle.kts ./
 COPY gradle ./gradle
 
+RUN sed -i 's/\r$//' gradlew
+
 RUN chmod +x gradlew
 RUN ./gradlew --no-daemon dependencies
 
