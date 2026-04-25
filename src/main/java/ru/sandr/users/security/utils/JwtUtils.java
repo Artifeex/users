@@ -2,40 +2,38 @@ package ru.sandr.users.security.utils;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.security.Keys;
-import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
-import ru.sandr.users.security.entity.RefreshToken;
 
-import javax.crypto.SecretKey;
-import java.nio.charset.StandardCharsets;
+import java.security.interfaces.RSAPrivateKey;
+import java.security.interfaces.RSAPublicKey;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.*;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 
 @Component
 public class JwtUtils {
 
-    @Value("${tokens.jwt.secret}")
-    private String secret;
+    @Value("${tokens.jwt.private-key}")
+    private RSAPrivateKey privateKey;
+
+    @Value("${tokens.jwt.public-key}")
+    private RSAPublicKey publicKey;
+
+    @Value("${tokens.jwt.kid}")
+    private String kid;
 
     @Value("${tokens.jwt.access.expiration}")
     private Duration accessExpiration;
 
     @Value("${tokens.jwt.claim.roles:roles}")
     private String roleClaimName;
-
-    private SecretKey key;
-
-    @PostConstruct
-    public void init() {
-        // Создаем объект ключа(симметричный, т.е. им можно как проверять, так и генерировать токены)
-        key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
-    }
 
     public String generateAccessToken(CustomUserDetails userDetails) {
         List<String> roles = userDetails.getAuthorities().stream().map(GrantedAuthority::getAuthority).toList();
@@ -49,11 +47,14 @@ public class JwtUtils {
 
 
         return Jwts.builder()
+                   .header()
+                   .keyId(kid)
+                   .and()
                    .claims(claims) // наши кастомные поля
-                   .subject(userDetails.getUsername()) // стандартное поле sub
+                   .subject(userDetails.getUserId().toString()) //
                    .issuedAt(Date.from(now)) // стандартное поле iat
                    .expiration(Date.from(accessExpirationInstant)) // стандартное поле exp
-                   .signWith(key) // подписыаем
+                   .signWith(privateKey, Jwts.SIG.RS256) // подписыаем private ключом и указываем, что использовали алгоритм RS256 для создания ключей
                    .compact();
     }
 
@@ -87,7 +88,7 @@ public class JwtUtils {
 
     private Claims extractAllClaims(String token) {
         return Jwts.parser()
-                   .verifyWith(key) // Проверяем подпись тем же ключом
+                   .verifyWith(publicKey) // Проверяем подпись public ключом
                    .build()
                    .parseSignedClaims(token)
                    .getPayload();

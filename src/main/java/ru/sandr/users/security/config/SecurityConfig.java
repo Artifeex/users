@@ -59,14 +59,15 @@ public class SecurityConfig {
                    .authorizeHttpRequests(
                            auth ->
                                    auth.requestMatchers(
-                                                   "/swagger-ui.html",
-                                                   "/swagger-ui/**",
-                                                   "/v3/api-docs",
-                                                   "/v3/api-docs/**"
-                                           )
-                                           .permitAll()
+                                               "/swagger-ui.html",
+                                               "/swagger-ui/**",
+                                               "/v3/api-docs",
+                                               "/v3/api-docs/**"
+                                       )
+                                       .permitAll()
                                        .requestMatchers("/auth/**").permitAll()
                                        .requestMatchers("/error").permitAll()
+                                       .requestMatchers("/.well-known/jwks.json").permitAll()
                                        .requestMatchers("/admin/**").hasRole("ADMIN")
                                        .requestMatchers("/hierarchy/**").hasRole("ADMIN")
                                        .requestMatchers("/teachers/**").hasRole("TEACHER")

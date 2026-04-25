@@ -9,6 +9,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import ru.sandr.users.user.entity.User;
 
 import java.util.Collection;
+import java.util.UUID;
 
 @Getter
 @Setter
@@ -37,5 +38,9 @@ public class CustomUserDetails implements UserDetails {
 
     public String getEmail() {
         return user.getEmail();
+    }
+
+    public UUID getUserId() {
+        return user.getId();
     }
 }

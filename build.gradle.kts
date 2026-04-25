@@ -46,6 +46,9 @@ dependencies {
     // MapStruct
     implementation("org.mapstruct:mapstruct:1.6.3")
 
+    // Для генерации jwks(json web key set) - json для возрата public ключей
+    implementation("com.nimbusds:nimbus-jose-jwt:10.9")
+
     // Kafka
     implementation("org.springframework.kafka:spring-kafka")
 

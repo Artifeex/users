@@ -46,11 +46,13 @@ springdoc:
     path: /swagger-ui.html
 tokens:
   jwt:
-    secret: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
     access:
       expiration: 60m
     claim:
       roles: roles # field name in jwt token
+    private-key: "classpath:certs/private.pem"
+    public-key: "classpath:certs/public.pem"
+    kid: "users-serivce-key-2026-04"
 
   refresh:
     expiration: 30d
