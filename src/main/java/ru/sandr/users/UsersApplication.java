@@ -3,12 +3,16 @@ package ru.sandr.users;
 import jakarta.annotation.PostConstruct;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 import java.util.TimeZone;
 
 @SpringBootApplication
 @EnableScheduling
+@EnableKafka
+@EnableConfigurationProperties
 public class UsersApplication {
 
     @PostConstruct

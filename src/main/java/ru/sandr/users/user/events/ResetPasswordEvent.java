@@ -12,6 +12,8 @@ public record ResetPasswordEvent(
         String linkForResetEvent
 ) implements DomainEvent {
 
+    public static final String TYPE_NAME = "ResetPasswordEvent";
+
     @Override
     public String getAggregateId() {
         return userId.toString();
@@ -19,7 +21,7 @@ public record ResetPasswordEvent(
 
     @Override
     public String getType() {
-        return "ResetPasswordEvent";
+        return TYPE_NAME;
     }
 
     @Override

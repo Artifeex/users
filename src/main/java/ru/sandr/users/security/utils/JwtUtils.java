@@ -11,10 +11,7 @@ import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.function.Function;
 
 @Component
@@ -54,7 +51,10 @@ public class JwtUtils {
                    .subject(userDetails.getUserId().toString()) //
                    .issuedAt(Date.from(now)) // стандартное поле iat
                    .expiration(Date.from(accessExpirationInstant)) // стандартное поле exp
-                   .signWith(privateKey, Jwts.SIG.RS256) // подписыаем private ключом и указываем, что использовали алгоритм RS256 для создания ключей
+                   .signWith(
+                           privateKey,
+                           Jwts.SIG.RS256
+                   ) // подписыаем private ключом и указываем, что использовали алгоритм RS256 для создания ключей
                    .compact();
     }
 
@@ -84,6 +84,10 @@ public class JwtUtils {
     private <T> T extractClaim(String token, Function<Claims, T> claimsResolver) {
         final Claims claims = extractAllClaims(token);
         return claimsResolver.apply(claims);
+    }
+
+    public String extractSubject(String token) {
+        return Jwts.parser().verifyWith(publicKey).build().parseSignedClaims(token).getPayload().getSubject();
     }
 
     private Claims extractAllClaims(String token) {

@@ -141,11 +141,11 @@ public class AuthenticationService {
 
     private User getCurrentUser() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        Object username = auth.getPrincipal();
-        return userRepository.findByUsernameOrEmail(username.toString(), username.toString())
+        Object userId = auth.getPrincipal();
+        return userRepository.findById(UUID.fromString(userId.toString()))
                              .orElseThrow(() -> new ObjectNotFoundException(
                                      "USER_NOT_FOUND",
-                                     "User not found: " + username
+                                     "User not found: " + userId
                              ));
     }
 

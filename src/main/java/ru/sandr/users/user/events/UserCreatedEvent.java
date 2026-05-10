@@ -15,14 +15,16 @@ public record UserCreatedEvent (
     String temporaryPassword
 ) implements DomainEvent {
 
+    public static final String TYPE_NAME = "UserCreatedEvent";
+
     @Override
     public String getAggregateId() {
-        return "";
+        return userId.toString();
     }
 
     @Override
     public String getType() {
-        return "UserCreatedEvent";
+        return TYPE_NAME;
     }
 
     @Override

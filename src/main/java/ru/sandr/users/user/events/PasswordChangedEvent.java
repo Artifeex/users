@@ -11,6 +11,8 @@ public record PasswordChangedEvent(
         String email
 ) implements DomainEvent {
 
+    public static final String TYPE_NAME = "PasswordChangedEvent";
+
     @Override
     public String getAggregateId() {
         return userId.toString();
@@ -18,7 +20,7 @@ public record PasswordChangedEvent(
 
     @Override
     public String getType() {
-        return "PasswordChangedEvent";
+        return TYPE_NAME;
     }
 
     @Override

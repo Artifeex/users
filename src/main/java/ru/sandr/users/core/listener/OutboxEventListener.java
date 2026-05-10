@@ -22,6 +22,11 @@ public class OutboxEventListener {
     private final OutboxMessageRepository outboxMessageRepository;
     private final ObjectMapper objectMapper;
 
+    /**
+     * Вызывается в том же потоке и в той же транзакции, в которой публикуется event. Обычный event listener тоже в той же транзакции и потоке, но этот лучше тем, что дает всей бизнес логике выполниться, а только потом сохраниться event в outbox таблицу
+     *
+     * @param domainEvent event, который хотим сохранить в outbox таблицу
+     */
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void handleDomainEvent(DomainEvent domainEvent) {
         try {

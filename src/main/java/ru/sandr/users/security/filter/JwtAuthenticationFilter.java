@@ -60,15 +60,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
      */
     private boolean authorizeByJwtToken(HttpServletRequest request, HttpServletResponse response, String authHeader) {
         try {
-            String username;
+            String userId;
             String jwt;
             jwt = authHeader.substring(JWT_BEGIN_INDEX_IN_BEARER);
-            username = jwtUtils.extractUsername(jwt);
+            userId = jwtUtils.extractSubject(jwt);
 
-            if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+            if (userId != null && SecurityContextHolder.getContext().getAuthentication() == null) {
                 var roles = jwtUtils.extractRoles(jwt).stream().map(SimpleGrantedAuthority::new).toList();
                 UsernamePasswordAuthenticationToken usernamePasswordAuthenticationToken = new UsernamePasswordAuthenticationToken(
-                        username,
+                        userId,
                         null,
                         roles
                 );

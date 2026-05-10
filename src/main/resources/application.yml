@@ -27,9 +27,6 @@ spring:
   liquibase:
     change-log: classpath:db/changelog/users-changelog-master.yml
     enabled: true
-
-
-
 server:
   port: 8080
 
@@ -60,3 +57,8 @@ tokens:
   resetPassword:
     length: 15
     expiration: 15m
+router:
+  file-topic-name: my-custom-topic
+  user-topic-name: user-topic
+api:
+  file-service-base-url: "http://localhost:8087"

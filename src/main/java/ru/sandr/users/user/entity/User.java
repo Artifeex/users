@@ -67,5 +67,8 @@ public class User extends AuditableEntity {
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private TeacherProfile teacherProfile;
 
+    @Column(name = "avatar_file_id", nullable = true)
+    private UUID avatarFileId;
+
 }
 
