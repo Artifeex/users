@@ -18,7 +18,7 @@ public class PageableValidator {
             String frontedField = order.getProperty();
 
             if(!allowedToSortFields.containsKey(frontedField)) {
-                throw new BadRequestException("BAD_SORT_FIELD", "Сортировка по полю " + frontedField + " запрещена");
+                throw new BadRequestException("BAD_SORT_FIELD", "Sorting by field '" + frontedField + "' is not allowed");
             }
 
             safeOrders.add(new Sort.Order(order.getDirection(), allowedToSortFields.get(frontedField)));

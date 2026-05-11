@@ -24,16 +24,16 @@ public class ResetPasswordToken {
     @Column(name = "token_hash", unique = true, nullable = false)
     private String tokenHash;
 
-    @NotNull
+    @NotNull(message = "user is required")
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", referencedColumnName = "id")
     private User user;
 
-    @NotNull
+    @NotNull(message = "expiryAt is required")
     @Column(name = "expiry_at", nullable = false)
     private Instant expiryAt;
 
-    @NotNull
+    @NotNull(message = "createdAt is required")
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 }

@@ -137,7 +137,7 @@ public class AdminUserService {
         }
         var group = studentGroupRepository.findById(request.groupId())
                                           .orElseThrow(() -> new ObjectNotFoundException(
-                                                  "GROUP_NOT_FOUND",
+                                                  "STUDENT_GROUP_NOT_FOUND",
                                                   "Student group not found: " + request.groupId()
                                           ));
         studentProfileRepository.save(StudentProfile.builder().user(savedUser).group(group).build());
@@ -210,7 +210,7 @@ public class AdminUserService {
     private void updateStudentGroup(UUID id, UpdateUserByAdminRequest request) {
         var group = studentGroupRepository.findById(request.groupId())
                                           .orElseThrow(() -> new ObjectNotFoundException(
-                                                  "GROUP_NOT_FOUND",
+                                                  "STUDENT_GROUP_NOT_FOUND",
                                                   "Student group not found: " + request.groupId()
                                           ));
 
@@ -268,7 +268,7 @@ public class AdminUserService {
             }
             var group = studentGroupRepository.findById(request.groupId())
                                               .orElseThrow(() -> new ObjectNotFoundException(
-                                                      "GROUP_NOT_FOUND",
+                                                      "STUDENT_GROUP_NOT_FOUND",
                                                       "Student group not found: " + request.groupId()
                                               ));
             user.setStudentProfile(StudentProfile.builder().user(user).group(group).build());

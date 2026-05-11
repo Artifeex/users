@@ -10,7 +10,7 @@ import java.lang.annotation.*;
 @Retention(RetentionPolicy.RUNTIME)
 @Constraint(validatedBy = OptionalNotBlankValidator.class)
 public @interface OptionalNotBlank {
-    String message() default "Поле не может быть пустым или состоять только из пробелов";
+    String message() default "must not be blank";
     Class<?>[] groups() default {};
     Class<? extends Payload>[] payload() default {};
 }

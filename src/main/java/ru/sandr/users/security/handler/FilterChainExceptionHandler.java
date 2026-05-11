@@ -35,7 +35,7 @@ public class FilterChainExceptionHandler implements AuthenticationEntryPoint, Ac
                 request,
                 response,
                 null,
-                new UnauthorizedException("NO_AUTHORIZED", "Пользователь не авторизован")
+                new UnauthorizedException("AUTHENTICATION_REQUIRED", "Authentication is required")
         );
     }
 
@@ -53,7 +53,7 @@ public class FilterChainExceptionHandler implements AuthenticationEntryPoint, Ac
                 null,
                 new ru.sandr.users.core.exception.AccessDeniedException(
                         "FORBIDDEN",
-                        "У пользователя недостаточно прав для выполнения операции"
+                        "Insufficient permissions to perform this operation"
                 )
         );
     }

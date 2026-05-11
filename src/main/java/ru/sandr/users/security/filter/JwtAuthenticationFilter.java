@@ -83,7 +83,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     request,
                     response,
                     null,
-                    new UnauthorizedException("TOKEN_EXPIRED", "Срок действия токена истек")
+                    new UnauthorizedException("TOKEN_EXPIRED", "Token has expired")
             );
             return false;
         } catch (SignatureException e) {
@@ -92,7 +92,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     request,
                     response,
                     null,
-                    new UnauthorizedException("INVALID_SIGNATURE", "Неверная подпись токена") // Возможно друг
+                    new UnauthorizedException("INVALID_SIGNATURE", "Invalid token signature") // Possibly issued by another service
             );
             return false;
         } catch (MalformedJwtException e) {
@@ -101,7 +101,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     request,
                     response,
                     null,
-                    new UnauthorizedException("INVALID_JWT_FORMAT", "Некорректный формат токена")
+                    new UnauthorizedException("INVALID_JWT_FORMAT", "Invalid JWT format")
             );
             return false;
         }

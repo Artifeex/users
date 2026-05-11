@@ -1,3 +1,9 @@
 package ru.sandr.users.imports.dto;
 
-public record ImportResultResponse(int imported) {}
+import io.swagger.v3.oas.annotations.media.Schema;
+
+@Schema(description = "Import summary response")
+public record ImportResultResponse(
+        @Schema(description = "Number of successfully imported rows", example = "245")
+        int imported
+) {}

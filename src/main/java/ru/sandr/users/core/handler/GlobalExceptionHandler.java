@@ -27,8 +27,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BadCredentialsException.class)
     @ResponseStatus(HttpStatus.UNAUTHORIZED)
     public ApiErrorResponse handleBadCredentials(BadCredentialsException ex) {
-        // Возвращаем абстрактное сообщение в целях безопасности (не уточняем, логин неверный или пароль)
-        var response = new ApiErrorResponse("Неверный логин или пароль", "BAD_CREDENTIALS");
+        // Return abstract message for security reasons.
+        var response = new ApiErrorResponse("Invalid username or password", "BAD_CREDENTIALS");
         response.addPlaceHolder("reason", "invalid_credentials");
         return response;
     }
@@ -54,7 +54,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentNotValidException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiErrorResponse handleValidationExceptions(MethodArgumentNotValidException ex) {
-        var response = new ApiErrorResponse("Ошибка валидации данных", "VALIDATION_FAILED");
+        var response = new ApiErrorResponse("Request validation failed", "VALIDATION_FAILED");
         var allErrors = ex.getBindingResult().getAllErrors();
         response.addPlaceHolder("violationsCount", allErrors.size());
 
@@ -69,7 +69,7 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiErrorResponse handleMessageNotReadable(HttpMessageNotReadableException ex) {
         ApiErrorResponse response = new ApiErrorResponse(
-                "Ошибка чтения запроса. Проверьте формат данных.",
+                "Request body cannot be parsed. Check payload format.",
                 "MALFORMED_JSON"
         );
 
@@ -85,7 +85,7 @@ public class GlobalExceptionHandler {
 
             response.addPlaceHolder("field", fieldName);
             response.addPlaceHolder("expectedType", expectedType);
-            response.addPlaceHolder("reason", "Неверный тип данных");
+            response.addPlaceHolder("reason", "Invalid data type");
             if (!isSensitiveField(fieldName) && invalidFormatException.getValue() != null) {
                 response.addPlaceHolder("actualValue", invalidFormatException.getValue());
             }
@@ -93,7 +93,7 @@ public class GlobalExceptionHandler {
         // Если клиент прислал вообще не JSON (например, забыл закрыть скобку '}')
         else {
             response.addPlaceHolder("field", "body");
-            response.addPlaceHolder("reason", "Некорректный синтаксис JSON");
+            response.addPlaceHolder("reason", "Malformed JSON syntax");
         }
         return response;
     }
@@ -102,7 +102,7 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiErrorResponse handleMethodArgumentTypeMismatch(MethodArgumentTypeMismatchException ex) {
         ApiErrorResponse response = new ApiErrorResponse(
-                "Некорректный тип параметра запроса",
+                "Invalid request parameter type",
                 "INVALID_ARGUMENT_TYPE"
         );
 
@@ -110,7 +110,7 @@ public class GlobalExceptionHandler {
         String expectedType = ex.getRequiredType() != null ? ex.getRequiredType().getSimpleName() : "unknown";
         response.addPlaceHolder("field", fieldName);
         response.addPlaceHolder("expectedType", expectedType);
-        response.addPlaceHolder("reason", "Неверный тип данных");
+        response.addPlaceHolder("reason", "Invalid data type");
         if (!isSensitiveField(fieldName) && ex.getValue() != null) {
             response.addPlaceHolder("actualValue", ex.getValue());
         }

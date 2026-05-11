@@ -21,22 +21,22 @@ public class RefreshToken {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @NotNull // тогда если мы попытаемся отправить сохранение/обновление такого объекта, то сам hibernate проверит пустоту
+    @NotNull(message = "tokenHash is required") // тогда если мы попытаемся отправить сохранение/обновление такого объекта, то сам hibernate проверит пустоту
     // и если окажется, что здесь null, то выбросить ConstraintViolationException еще до того, как
     // сделате запрос в БД. Т.е. fail-fast
     @Column(name = "token_hash", unique = true, nullable = false) // UNIQUE соответствует liquibase (auth.refresh_token.token_hash)
     private String tokenHash;
 
-    @NotNull
+    @NotNull(message = "user is required")
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", referencedColumnName = "id")
     private User user;
 
-    @NotNull
+    @NotNull(message = "expiryAt is required")
     @Column(name = "expiry_at", nullable = false)
     private Instant expiryAt;
 
-    @NotNull
+    @NotNull(message = "createdAt is required")
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 }
