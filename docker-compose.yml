@@ -17,7 +17,38 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
+
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: users-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./ops/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro # ro - read only для того, чтобы prometheus не мог сам изменить этот файл внутри контейнера
+      - prometheus-data:/prometheus # Объявляем volume для хранения данных prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml # Указываем файл с конфигурацией prometheus, в которой будут конфиги для scrape jobs
+      - --storage.tsdb.path=/prometheus # Указываем директорию для хранения данных prometheus. Причем мы перед этим завели volume как раз для этой директории, чтобы данные не потерялись
+      - --storage.tsdb.retention.time=15d # Указываем время хранения данных prometheus. По умолчанию 15 дней
+    extra_hosts:
+      - "host.docker.internal:host-gateway" # В контейнере появляется запись в /etc/hosts, которая позволяет обращаться к хосту по имени host.docker.internal, а не по ip адресу. А сам host-gateway - это специальное значение docker daemon, которое позволяет обращаться к хосту по ip адресу, но не используя хардкор ip адрес
+    restart: unless-stopped # Политика перезапуска контейнера. Если контейнер упал, то он будет перезапущен или если мы перезагрузили сам компьютер, то при включении docker daemon такой контейнер так же будет поднят. Не будет поднят, только если явно сами руками остановим его
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: users-grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    restart: unless-stopped
 
 volumes:
   users-db-data:
+  prometheus-data:
+  grafana-data:
 

@@ -30,6 +30,18 @@ spring:
 server:
   port: 8080
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus # Открываем только эти эндпоинты для доступа извне
+  endpoint:
+    prometheus:
+      enabled: true
+  metrics:
+    tags: 
+      application: ${spring.application.name} # Тег для метрик, чтобы группировать метрики по сервису. И в целом тэги плолезны для различных фильтраций и разграничений
+
 app:
   import:
     max-errors: 50
