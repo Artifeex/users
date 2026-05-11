@@ -9,6 +9,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.sandr.users.core.exception.ObjectNotFoundException;
+import ru.sandr.users.core.exception.UnauthorizedException;
 import ru.sandr.users.hierarchy.dto.StudentGroupResponse;
 import ru.sandr.users.hierarchy.mapper.StudentGroupMapper;
 import ru.sandr.users.hierarchy.repository.StudentGroupRepository;
@@ -54,16 +55,24 @@ public class TeacherStudentGroupSearchService {
 
     private UUID currentTeacherId() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || auth.getPrincipal() == null) {
-            throw new ObjectNotFoundException("TEACHER_NOT_FOUND", "Authenticated teacher not found");
-        }
-        String login = auth.getPrincipal().toString();
-        return teacherProfileRepository.findByUser_UsernameOrUser_Email(login, login)
+        UUID userId = extractCurrentUserId(auth);
+        return teacherProfileRepository.findByUser_Id(userId)
                                        .map(teacherProfile -> teacherProfile.getId())
                                        .orElseThrow(() -> new ObjectNotFoundException(
                                                "TEACHER_NOT_FOUND",
                                                "Teacher profile not found for authenticated user"
                                        ));
+    }
+
+    private UUID extractCurrentUserId(Authentication auth) {
+        if (auth == null || auth.getPrincipal() == null) {
+            throw new UnauthorizedException("AUTHENTICATION_REQUIRED", "Authenticated teacher not found");
+        }
+        try {
+            return UUID.fromString(auth.getPrincipal().toString());
+        } catch (IllegalArgumentException e) {
+            throw new UnauthorizedException("INVALID_AUTH_PRINCIPAL", "Invalid authenticated principal format");
+        }
     }
 
     private Collection<Long> nonEmptyOrFallback(Collection<Long> ids) {

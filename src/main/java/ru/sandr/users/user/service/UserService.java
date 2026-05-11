@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClient;
 import ru.sandr.users.core.exception.ConflictException;
 import ru.sandr.users.core.exception.ObjectNotFoundException;
+import ru.sandr.users.core.exception.UnauthorizedException;
 import ru.sandr.users.security.service.AuthenticationService;
 import ru.sandr.users.user.dto.ChangeAvatarRequestDto;
 import ru.sandr.users.user.dto.ChangePasswordRequest;
@@ -62,12 +63,23 @@ public class UserService {
 
     private User getCurrentUser() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        Object username = auth.getPrincipal();
-        return userRepository.findByUsernameOrEmail(username.toString(), username.toString())
+        UUID userId = extractCurrentUserId(auth);
+        return userRepository.findById(userId)
                              .orElseThrow(() -> new ObjectNotFoundException(
                                      "USER_NOT_FOUND",
-                                     "User not found: " + username
+                                     "User not found: " + userId
                              ));
+    }
+
+    private UUID extractCurrentUserId(Authentication auth) {
+        if (auth == null || auth.getPrincipal() == null) {
+            throw new UnauthorizedException("AUTHENTICATION_REQUIRED", "Authenticated user not found");
+        }
+        try {
+            return UUID.fromString(auth.getPrincipal().toString());
+        } catch (IllegalArgumentException e) {
+            throw new UnauthorizedException("INVALID_AUTH_PRINCIPAL", "Invalid authenticated principal format");
+        }
     }
 
     @Transactional

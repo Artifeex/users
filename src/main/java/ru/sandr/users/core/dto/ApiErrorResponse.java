@@ -2,24 +2,41 @@ package ru.sandr.users.core.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Getter;
-import lombok.RequiredArgsConstructor;
-
-import java.util.ArrayList;
-import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Objects;
 
 @Getter
-@RequiredArgsConstructor
 public class ApiErrorResponse {
 
-    private final String message;
     private final String errorCode;
+    private final String debugErrorMessage;
 
     @JsonInclude(JsonInclude.Include.NON_EMPTY)
-    private final List<ValidationError> violations = new ArrayList<>();
+    private final Map<String, String> placeHolders;
 
-    public void addViolation(String fieldName, String errorMessage) {
-        violations.add(new ValidationError(fieldName, errorMessage));
+    public ApiErrorResponse(String debugErrorMessage, String errorCode) {
+        this(debugErrorMessage, errorCode, Map.of());
     }
 
-    public record ValidationError(String fieldName, String errorMessage) {}
+    public ApiErrorResponse(String debugErrorMessage, String errorCode, Map<String, ?> placeHolders) {
+        this.errorCode = errorCode;
+        this.debugErrorMessage = debugErrorMessage;
+        this.placeHolders = new LinkedHashMap<>();
+        addPlaceHolders(placeHolders);
+    }
+
+    public void addPlaceHolder(String key, Object value) {
+        if (key == null || value == null) {
+            return;
+        }
+        placeHolders.put(key, Objects.toString(value));
+    }
+
+    public void addPlaceHolders(Map<String, ?> values) {
+        if (values == null || values.isEmpty()) {
+            return;
+        }
+        values.forEach(this::addPlaceHolder);
+    }
 }

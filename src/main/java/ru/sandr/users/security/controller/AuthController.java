@@ -43,7 +43,7 @@ public class AuthController {
     public ResponseEntity<AuthenticationResponseDto> refreshToken(@CookieValue(name = "refreshToken") String refreshToken) {
         var authResult = authenticationService.refreshToken(refreshToken);
         ResponseCookie responseCookie = createRefreshTokenCookie(
-                authResult.accessToken(),
+                authResult.refreshToken(),
                 authResult.refreshTokenDuration()
         );
         return ResponseEntity.ok()

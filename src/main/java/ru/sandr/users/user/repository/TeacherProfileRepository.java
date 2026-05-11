@@ -11,5 +11,7 @@ public interface TeacherProfileRepository extends JpaRepository<TeacherProfile, 
     boolean existsByDepartment_Id(Long departmentId);
 
     Optional<TeacherProfile> findByUser_UsernameOrUser_Email(String username, String email);
+
+    Optional<TeacherProfile> findByUser_Id(UUID userId);
 }
 

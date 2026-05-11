@@ -5,6 +5,7 @@ import ru.sandr.users.core.exception.CustomException;
 import ru.sandr.users.imports.dto.ImportRowError;
 
 import java.util.List;
+import java.util.Map;
 
 @Getter
 public class ImportValidationException extends CustomException {
@@ -13,7 +14,8 @@ public class ImportValidationException extends CustomException {
 
     public ImportValidationException(List<ImportRowError> errors) {
         super("IMPORT_VALIDATION_FAILED",
-                "Import failed: " + errors.size() + " validation error(s) found");
+                "Import failed: " + errors.size() + " validation error(s) found",
+                Map.of("errorsCount", errors.size()));
         this.errors = errors;
     }
 }
