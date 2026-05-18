@@ -1,0 +1,13 @@
+apiVersion: 1
+# Данный файлик нужен для декларативного добавления datasoure в grafana. Это как если бы мы делали это через UI
+datasources:
+  - name: Prometheus # Имя datasource в ui
+    uid: prometheus-main # Уникальный идентификатор datasource
+    orgId: 1 # Для разграничения доступа по группам. Если несколько комнад пользуется одним инстансом grafana, то мы можем разгранчить так доступ одной команды в дашбордам и datasource другой команды
+    type: prometheus # тип datasource(prometheus, postgres, loki(для логов), tempo)
+    access: proxy # Кто делает запросы в prometheus. Если proxy - то запрос идет на grafana сервер, который запущен у нас в docker и он сам со своих host идет в prometheus. Если выбрать direct, то браузер сам выполнит запрос в prometheus к datasource и потом будет ренедеринг. ЛУчше выбирать proxy, поскольку prometheus крутится в одной сети с grafana сервер и ему проще до него достучаться
+    url: http://prometheus:9090 # Куда grafana ходит
+    isDefault: true 
+    editable: false # Запрет редактирования через UI
+    # Есть еще jsonData - для настройки таймаутов, частоты запросов
+    # secureJsonData - если prometheus требует авторизации. Если во внутренней сети и не требует, то не нужно

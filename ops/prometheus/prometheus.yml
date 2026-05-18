@@ -2,8 +2,121 @@ global:
   scrape_interval: 15s
   evaluation_interval: 15s
 
+rule_files:
+  - /etc/prometheus/alerts.yml
+
 scrape_configs:
   - job_name: "users-service"
     metrics_path: /actuator/prometheus
     static_configs:
-      - targets: ["host.docker.internal:8080"]
+      - targets: ["users-app:8080"]
+  - job_name: "file-service"
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["file-app:8087"]
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["prometheus:9090"]
+
+  - job_name: "postgres-exporter"
+    static_configs:
+      - targets: ["postgres-exporter-users:9187"]
+
+  - job_name: "node-exporter" # Данное значение кладется в label = job
+    static_configs:
+      - targets: ["node-exporter:9100"] # Данное значение кладется в label = target
+
+  - job_name: "kafka-exporter"
+    static_configs:
+      - targets: ["kafka-exporter:9308"] # Указываем target(host:port) до kafka-exporter. А вот path будет использоваться дефолтный для всех scrapper = /metrics.
+
+  - job_name: "minio"
+    metrics_path: /minio/v2/metrics/cluster
+    static_configs:
+      - targets: ["minio:9000"]
+
+  - job_name: "blackbox-http"
+    metrics_path: /probe # Задаем metric path для нашего blackbox-exportera. Он ожидаем именно на /probe endpoint, а не стандартный /metrics.
+    params: # С помощью params мы можем указать prometheus что передавать как параметр запроса. В данной случае в запрос будет передан ?module=http_2xx. module = http_2xx - это не случайное имя. Мы в настройке black-box указали модуль с таким именем и указали настройки для проверки
+      module: [http_2xx]
+    static_configs:
+      - targets: # в targers мы прописываем не exporter, а endpointы, которые мы хотим проверять через blackbox-exporter. Prometheus в зависимости от количества targets в endpoint создает отдельные scrape targers(внутри одного scrape job) для каждого target и у каждого из них свой контекст для лейблов. И опрашивает от их так же независимо
+          - http://users-app:8080/actuator/health
+          - http://file-app:8087/actuator/health
+          - http://grafana:3000/api/health
+          - http://prometheus:9090/-/healthy
+    relabel_configs:
+      - source_labels: [__address__] # в __address__ это служебный label, в котором лежит 1 значение из targer(помним о том, что контекст у каждого scrappera разный для каждого target. Т.е. у одного scrappera в target будет лежать actuator, у другого health)
+        target_label: __param_target # говорим, что в query парамтер запроса с именем target запишем значения из __address__. Это тоже делается через слежубный label __param_<имя параметра>. А копирование происходит, потому что по дефолту есть тег action, в котором по дефолту prometheus ставит replacement.
+      - source_labels: [__param_target] # берез записанное значение и прописываем его в label instance
+        target_label: instance 
+      - target_label: __address__ # Но в __address__ мы теперь долны записывать сам blackbox-exporter, т.к. prometheus делает запрос именно по тому, что лежит в __address__.
+        replacement: blackbox-exporter:9115
+
+  - job_name: "blackbox-tcp"
+    metrics_path: /probe
+    params:
+      module: [tcp_connect]
+    static_configs:
+      - targets:
+          - users-db:5432
+          - kafka:29092
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+# default action = replace - так выглядит внутри одного - source_labels 
+# default regex = (.*)
+# default replacement = $1
+# source_labels
+# target_labels
+# 1) replace (default)
+# - source_labels: [__address__]
+#   target_label: __param_target
+
+# # 2) keep
+# - source_labels: [job]
+#   regex: "users-service|orders-service"
+#   action: keep
+
+# # 3) drop
+# - source_labels: [__meta_kubernetes_namespace]
+#   regex: "kube-system"
+#   action: drop
+
+# # 4) hashmod (например для шардинга)
+# - source_labels: [__address__]
+#   modulus: 2
+#   target_label: __tmp_hash
+#   action: hashmod
+
+# # 5) labeldrop (убрать шумные labels)
+# - regex: "pod_uid|container_id"
+#   action: labeldrop
+
+# # 6) labelkeep (оставить только whitelist)
+# - regex: "job|instance|application|env"
+#   action: labelkeep
+
+# # 7) labelmap (массовый rename)
+# - regex: "__meta_kubernetes_pod_label_(.+)"
+#   replacement: "$1"
+#   action: labelmap
+
+# # 8) keepequal
+# - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_port]
+#   target_label: __meta_kubernetes_pod_container_port_number
+#   action: keepequal
+
+# ВОт пример полного
+# relabel_configs:
+#   - source_labels: [label_a, label_b]   # list
+#     separator: ";"                      # default ";"
+#     regex: "(.*)"                       # default "(.*)"
+#     target_label: "instance"            # куда писать
+#     replacement: "$1"                   # default "$1"
+#     modulus: 2                          # только для hashmod
+#     action: replace                     # default replace

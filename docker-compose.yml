@@ -1,6 +1,22 @@
 version: "3.8"
 
 services:
+  users-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: users-app
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://users-db:5432/users
+      SPRING_DATASOURCE_USERNAME: users
+      SPRING_DATASOURCE_PASSWORD: users
+    depends_on:
+      users-db:
+        condition: service_healthy
+    restart: unless-stopped
+
   users-db:
     image: postgres:16-alpine
     container_name: users-db
@@ -19,6 +35,52 @@ services:
       retries: 5
     restart: unless-stopped
 
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: users-postgres-exporter
+    environment:
+      DATA_SOURCE_NAME: "postgresql://users:users@users-db:5432/users?sslmode=disable"
+    ports:
+      - "9187:9187"
+    depends_on:
+      users-db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: users-node-exporter
+    command:
+      - "--path.rootfs=/host"
+    volumes:
+      - "/:/host:ro,rslave"
+    ports:
+      - "9100:9100"
+    restart: unless-stopped
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    container_name: users-blackbox-exporter
+    ports:
+      - "9115:9115"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./ops/blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    command:
+      - "--config.file=/etc/blackbox_exporter/config.yml"
+    restart: unless-stopped
+
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:v1.8.0
+    container_name: users-kafka-exporter
+    command:
+      - "--kafka.server=${KAFKA_BOOTSTRAP_SERVERS:-host.docker.internal:9092}"
+      - "--web.listen-address=:9308"
+    ports:
+      - "9308:9308"
+    restart: unless-stopped
+
 
   prometheus:
     image: prom/prometheus:v2.54.1
@@ -27,6 +89,7 @@ services:
       - "9090:9090"
     volumes:
       - ./ops/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro # ro - read only для того, чтобы prometheus не мог сам изменить этот файл внутри контейнера
+      - ./ops/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
       - prometheus-data:/prometheus # Объявляем volume для хранения данных prometheus
     command:
       - --config.file=/etc/prometheus/prometheus.yml # Указываем файл с конфигурацией prometheus, в которой будут конфиги для scrape jobs
@@ -43,6 +106,9 @@ services:
       - "3000:3000"
     volumes:
       - grafana-data:/var/lib/grafana
+      # Стоит обратить внимание на /etс и /var. Обычно принято в /etc сохранять конфигурационные файлы. А в /var/lib/<libName> какие-то файлы состояния или runtime. Поэтому provisioning мы кладем в /etc, т.к. это конфигурации для старта grafana. А вот dashboards уже конкретные, которые используется в работе кладем в /var/lib
+      - ./ops/grafana/provisioning:/etc/grafana/provisioning:ro # Данный путь является дефолтным для чтения grafan-ой настроек. В provisioning мы прописываем инструкции для Grafanfa при ее старте. Например, datasource и dashboard providers откуда читать json dashboards
+      - ./ops/grafana/dashboards:/var/lib/grafana/dashboards:ro # А эта уже папка с самими json для dashboards, которые мы не хотим потерять при поднятии grafana с нуля. Grafanfa не читает данную папку по умолчанию, она делает это через dashboard provider, который настраивается в provisioning 
     depends_on:
       - prometheus
     restart: unless-stopped

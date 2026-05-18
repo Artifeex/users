@@ -2,4 +2,4 @@
 
 --changeset AVSmirnov:0010-1
 ALTER TABLE users.users
-ADD COLUMN avatar_file_id uuid
+ADD COLUMN IF NOT EXISTS avatar_file_id uuid
