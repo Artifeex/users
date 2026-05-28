@@ -19,7 +19,7 @@ import ru.sandr.users.hierarchy.service.TeacherStudentGroupSearchService;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/teachers/me/student-groups")
+@RequestMapping("/api/v1/teachers/me/student-groups")
 @Tag(name = "Teacher Groups")
 @SecurityRequirement(name = "bearerAuth")
 public class TeacherStudentGroupController {

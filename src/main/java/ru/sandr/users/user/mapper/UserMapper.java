@@ -9,6 +9,8 @@ import ru.sandr.users.hierarchy.entity.FieldOfStudy;
 import ru.sandr.users.hierarchy.entity.StudentGroup;
 import ru.sandr.users.user.dto.AdminUserDetailsResponse;
 import ru.sandr.users.user.dto.AdminUserSearchResponse;
+import ru.sandr.users.user.dto.CurrentUserProfileResponse;
+import ru.sandr.users.user.dto.RoleName;
 import ru.sandr.users.user.entity.StudentProfile;
 import ru.sandr.users.user.entity.TeacherProfile;
 import ru.sandr.users.user.dto.UserResponse;
@@ -36,6 +38,25 @@ public interface UserMapper {
     @Mapping(target = "studentGroup", source = "user", qualifiedByName = "mapStudentGroupName")
     @Mapping(target = "department", source = "user", qualifiedByName = "mapDepartmentName")
     AdminUserDetailsResponse toAdminDetailsResponse(User user);
+
+    default CurrentUserProfileResponse toCurrentUserProfile(User user) {
+        List<String> roles = mapRoleNamesAsList(user.getUserRoles());
+        boolean isAdmin = roles.contains(RoleName.ROLE_ADMIN.name());
+
+        return new CurrentUserProfileResponse(
+                user.getId(),
+                roles,
+                user.getFirstName(),
+                user.getLastName(),
+                user.getMiddleName(),
+                user.getEmail(),
+                user.getAvatarFileId(),
+                mapFacultyName(user),
+                mapFieldOfStudyName(user),
+                mapDepartmentName(user),
+                mapStudentGroupName(user)
+        );
+    }
 
     @Named("mapRoleNames")
     default Set<String> mapRoleNames(Set<UserRole> userRoles) {

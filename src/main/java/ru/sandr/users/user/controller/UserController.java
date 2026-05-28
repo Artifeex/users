@@ -17,6 +17,7 @@ import ru.sandr.users.security.service.AuthenticationService;
 import ru.sandr.users.user.dto.ChangeAvatarRequestDto;
 import ru.sandr.users.user.dto.ChangePasswordRequest;
 import ru.sandr.users.user.dto.UpdateOwnProfileRequest;
+import ru.sandr.users.user.dto.CurrentUserProfileResponse;
 import ru.sandr.users.user.dto.UserResponse;
 import ru.sandr.users.user.service.UserService;
 
@@ -24,13 +25,26 @@ import java.util.UUID;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/users/me")
+@RequestMapping("/api/v1/users/me")
 @Tag(name = "Users")
 @SecurityRequirement(name = "bearerAuth")
 public class UserController {
 
     private final UserService userService;
     private final AuthenticationService authenticationService;
+
+    @GetMapping
+    @Operation(summary = "Get current user profile", description = "Returns profile of the authenticated user from JWT subject.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Current user profile"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized",
+                    content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "User not found",
+                    content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+    })
+    public CurrentUserProfileResponse getCurrentUser() {
+        return userService.getCurrentUser();
+    }
 
     @PatchMapping("/email")
     @Operation(summary = "Update current user profile", description = "Updates profile data of authenticated user.")
@@ -75,6 +89,7 @@ public class UserController {
     ) {
         userService.changeAvatar(request, UUID.fromString(userId));
     }
+
 
 
 }

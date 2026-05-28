@@ -1,0 +1,667 @@
+\section{Проектирование и реализация Users Service}
+
+\subsection{Архитектурная роль Users Service и границы ответственности}
+
+Users Service является одним из базовых сервисов микросервисной платформы дистанционного обучения. Его роль не ограничивается хранением учетных записей: сервис выступает центральным провайдером идентификации, источником JWT-токенов, владельцем данных о пользователях и сервисом управления учебной структурой вуза. Через Users Service администратор создает пользователей, назначает им роли, связывает студентов с учебными группами, преподавателей с кафедрами и задает область видимости учебных групп для преподавателей.
+
+В архитектуре платформы Users Service взаимодействует с клиентским приложением по REST API, хранит данные в PostgreSQL, публикует интеграционные события в Apache Kafka и предоставляет другим микросервисам публичные ключи для проверки JWT. Отдельные сценарии затрагивают Notification Service и File Service: первый получает события, связанные с учетными записями и паролями, а второй участвует в жизненном цикле аватара пользователя. При этом Users Service не отправляет электронные письма напрямую и не обрабатывает бинарное содержимое файлов.
+
+\image{users-service-component.png}{Место Users Service в микросервисной архитектуре платформы}{0.95}
+% UML source: users-service-component.puml -> users-service-component.png
+
+На этой диаграмме необходимо отразить Frontend Application, Users Service, Course Service, File Service, Notification Service, PostgreSQL и Apache Kafka. Диаграмма должна показать REST-взаимодействие клиента с Users Service, обращение прикладных сервисов к JWKS endpoint, публикацию событий в Kafka и асинхронную доставку событий в Notification Service и File Service.
+
+Границы ответственности Users Service определены следующим образом. Сервис является источником истины для учетных записей, ролей, профилей студентов и преподавателей, а также учебной иерархии: факультетов, кафедр, направлений подготовки и учебных групп. Сервис не реализует бизнес-логику курсов, уроков и образовательного контента. Файлы также находятся вне его владения: в профиле пользователя хранится только идентификатор аватара \texttt{avatar\_file\_id}, а фактические метаданные файла, presigned URL и объектное хранилище принадлежат File Service.
+
+\subsection{Проектирование реляционной модели данных пользователей, ролей и учебной иерархии}
+
+Реляционная модель Users Service реализована в PostgreSQL и логически разделена на пять схем: \texttt{users}, \texttt{hierarchy}, \texttt{auth}, \texttt{outbox} и \texttt{scheduler}. Схема \texttt{users} содержит учетные записи, роли и профили пользователей, \texttt{hierarchy} выделяется под учебную структуру вуза, \texttt{auth} хранит данные для refresh-token и reset-password сценариев, \texttt{outbox} используется для гарантированной публикации событий, а \texttt{scheduler} содержит служебную таблицу ShedLock для координации фоновых задач.
+
+Основной таблицей является \texttt{users.users}. В качестве первичного ключа используется UUID, что упрощает работу в распределенной системе и исключает зависимость публичных идентификаторов от последовательностей БД. Таблица содержит логин, email, хэш пароля, ФИО, признак активности \texttt{is\_active} и ссылку \texttt{avatar\_file\_id}. Поле \texttt{avatar\_file\_id} не имеет внешнего ключа, так как указывает на ресурс, управляемый другим микросервисом.
+
+Ролевая модель построена как связь многие-ко-многим между таблицами \texttt{users.users} и \texttt{users.roles} через \texttt{users.users\_roles}. В актуальной модели роли являются плоскими: \texttt{ROLE\_STUDENT}, \texttt{ROLE\_TEACHER}, \texttt{ROLE\_ADMIN}. Иерархия ролей на уровне БД не вводится, поскольку разграничение доступа выполняется на уровне API и доменных правил.
+
+Учебная структура вуза выносится в отдельную схему \texttt{hierarchy} и представлена таблицами \texttt{hierarchy.faculties}, \texttt{hierarchy.departments}, \texttt{hierarchy.fields\_of\_study} и \texttt{hierarchy.student\_groups}. Факультет является верхним уровнем иерархии. Кафедры и направления подготовки принадлежат факультету, а учебная группа связывается с факультетом и направлением подготовки. Профиль студента в схеме \texttt{users} содержит обязательную ссылку на группу из \texttt{hierarchy.student\_groups}; профиль преподавателя содержит ссылку на кафедру из \texttt{hierarchy.departments}. Такое разделение фиксирует различие между персональными данными пользователя и справочниками учебной организации.
+
+Отдельный элемент модели -- таблица \texttt{teacher\_group\_access\_scopes}. Она задает область видимости учебных групп для преподавателя. Scope может быть назначен на уровне конкретной группы, направления подготовки или факультета. Для этого используется составной ключ \texttt{(teacher\_id, scope\_type, scope\_id)}, где \texttt{scope\_type} определяет тип логической ссылки, а \texttt{scope\_id} хранит идентификатор соответствующей сущности.
+
+\image{users-service-er.png}{ER-модель базы данных Users Service}{1}
+% UML source: users-service-er.puml -> users-service-er.png
+
+На ER-диаграмме необходимо показать таблицы схем \texttt{users}, \texttt{hierarchy}, \texttt{auth}, \texttt{outbox} и \texttt{scheduler}, их первичные и внешние ключи, связь пользователей с ролями, профилями, refresh/reset токенами, а также учебную иерархию. Поле \texttt{avatar\_file\_id} следует обозначить как внешнюю межсервисную ссылку без FK.
+
+\subsection{Дизайн REST API и жизненный цикл учетной записи}
+
+REST API Users Service разделен на функциональные группы, каждая из которых соответствует отдельной зоне ответственности сервиса и имеет собственные требования к роли пользователя.
+
+\begin{table}[htbp]
+    \centering
+    \caption{Группы REST API Users Service}
+    \label{tab:users-rest-groups}
+    \small
+    \begin{tabular}{|p{4.1cm}|p{6.2cm}|p{3.8cm}|}
+        \hline
+        \textbf{Группа API} & \textbf{Назначение} & \textbf{Доступ} \\
+        \hline
+        \texttt{/auth/**} & Вход, refresh-token flow, восстановление пароля & Анонимный пользователь \\
+        \hline
+        \texttt{/.well-known/jwks.json} & Получение публичных ключей для проверки JWT & Анонимный доступ \\
+        \hline
+        \texttt{/admin/**} & Создание, изменение, поиск и деактивация пользователей & \texttt{ROLE\_ADMIN} \\
+        \hline
+        \texttt{/hierarchy/**} & Управление факультетами, кафедрами, направлениями и группами & \texttt{ROLE\_ADMIN} \\
+        \hline
+        \texttt{/api/v1/import/**} & Массовая загрузка структуры и пользователей из Excel & \texttt{ROLE\_ADMIN} \\
+        \hline
+        \texttt{/teachers/**} & Операции преподавателя, включая получение доступных групп & \texttt{ROLE\_TEACHER} \\
+        \hline
+        \texttt{/users/me/**} & Self-service операции профиля: email, пароль, аватар & Аутентифицированный пользователь \\
+        \hline
+    \end{tabular}
+\end{table}
+
+Ключевые сценарии жизненного цикла учетной записи описываются через последовательности взаимодействия между клиентом, Users Service, PostgreSQL, Kafka и Notification Service. В данном разделе Kafka рассматривается как часть пользовательского сценария, то есть как следствие бизнес-операции. Детали топиков, маршрутизации и гарантий доставки вынесены в раздел~\ref{subsec:users-kafka}.
+
+\subsubsection{Создание пользователя администратором}
+
+Создание пользователя выполняется администратором через административный REST API. Users Service валидирует уникальность логина и email, создает базовую учетную запись, назначает роль и формирует профиль студента или преподавателя. Для первичного входа генерируется временный пароль, в БД сохраняется только его хэш. После сохранения пользователя сервис инициирует событие \texttt{UserCreatedEvent}, которое в дальнейшем доставляется в Notification Service. Notification Service отправляет пользователю письмо с данными для первого входа.
+
+\image{seq-admin-create-user.png}{Создание пользователя администратором}{0.95}
+% UML source: seq-admin-create-user.puml -> seq-admin-create-user.png
+
+На диаграмме должны быть показаны: запрос администратора, сохранение пользователя, роли и профиля в PostgreSQL, запись события в outbox, публикация события в Kafka и отправка письма Notification Service. При массовой регистрации через Excel используется та же доменная логика создания учетных записей, но входные данные поступают из файла, а не из одиночного REST-запроса.
+
+\subsubsection{Вход пользователя по паролю}
+
+Вход в систему начинается с передачи логина и пароля в Users Service. Сервис получает учетную запись, проверяет активность пользователя и сравнивает введенный пароль с хэшем, сохраненным в БД. При успешной проверке выпускается access token, а refresh token сохраняется в БД в виде хэша и передается клиенту в HttpOnly cookie. В теле ответа клиент получает access token, который затем используется при обращении к защищенным endpoint'ам.
+
+\image{seq-login.png}{Вход пользователя и выдача access/refresh токенов}{0.95}
+% UML source: seq-login.puml -> seq-login.png
+
+На диаграмме необходимо отразить получение пользователя из PostgreSQL, проверку хэша пароля, выпуск JWT access token, генерацию refresh token, сохранение его хэша и установку cookie.
+
+\subsubsection{Обновление access token}
+
+Access token имеет ограниченное время жизни, поэтому для продолжения сессии используется refresh-token flow. Клиент обращается к endpoint обновления токена, браузер автоматически прикладывает HttpOnly cookie с refresh token. Users Service вычисляет хэш полученного значения, находит соответствующую запись в таблице \texttt{auth.refresh\_token}, проверяет срок действия и выполняет rotation: старое значение заменяется новым refresh token, а клиенту возвращается новый access token.
+
+\image{seq-refresh-token.png}{Обновление access token через refresh token}{0.95}
+% UML source: seq-refresh-token.puml -> seq-refresh-token.png
+
+На диаграмме нужно показать проверку refresh token по хэшу, ветку ошибки для отсутствующего или просроченного токена, rotation refresh token и выдачу нового access token.
+
+\subsubsection{Восстановление пароля}
+
+Сценарий восстановления пароля состоит из двух этапов. На первом этапе пользователь инициирует восстановление, передавая email. Users Service создает reset token, сохраняет в БД только его хэш и формирует событие \texttt{ResetPasswordEvent}. Notification Service получает событие и отправляет пользователю письмо со ссылкой или токеном восстановления.
+
+На втором этапе пользователь возвращается в систему с reset token и новым паролем. Users Service проверяет токен по хэшу, контролирует срок действия, обновляет хэш пароля пользователя и инициирует событие \texttt{PasswordChangedEvent}. Это событие позволяет Notification Service отправить пользователю уведомление о смене пароля.
+
+\image{seq-reset-password.png}{Восстановление и смена пароля пользователя}{0.95}
+% UML source: seq-reset-password.puml -> seq-reset-password.png
+
+На диаграмме должны быть показаны обе части процесса: forgot-password с генерацией reset token и отправкой письма, а затем reset-password с проверкой токена и обновлением пароля.
+
+\subsection{Stateless-модель безопасности на основе JWT и JWKS}
+
+Access token в Users Service реализован в формате JWT и подписывается асимметричным алгоритмом \texttt{RS256}. Закрытый RSA-ключ используется только Users Service для подписи токена. Публичный ключ публикуется через endpoint \texttt{/.well-known/jwks.json} в формате JSON Web Key Set. Такой формат позволяет прикладным микросервисам получать публичные ключи и проверять подпись access token локально.
+
+\image{seq-jwt-jwks-validation.png}{Проверка JWT downstream-сервисом через JWKS}{0.95}
+% UML source: seq-jwt-jwks-validation.puml -> seq-jwt-jwks-validation.png
+
+Диаграмма должна показать следующий flow: downstream-сервис получает JWKS у Users Service при старте приложения или при первом запросе, кэширует публичный ключ, принимает запрос клиента с access token, определяет ключ по \texttt{kid}, проверяет подпись алгоритмом \texttt{RS256}, валидирует срок действия и claims токена. Без доступа к приватному ключу downstream-сервис не может выпустить новый валидный токен, но может убедиться, что токен действительно был подписан Users Service и не был изменен после выпуска.
+
+Payload access token содержит идентификатор пользователя в claim \texttt{sub}, роли пользователя в claim \texttt{roles}, а также стандартные claims времени выпуска и истечения срока действия. Refresh token не является JWT и не используется для доступа к API. Он передается в HttpOnly cookie, что ограничивает доступ к нему со стороны JavaScript-кода браузера. В БД refresh token хранится только в виде хэша, поэтому компрометация таблицы не раскрывает исходные значения действующих токенов.
+
+\subsection{Организация асинхронного взаимодействия через Apache Kafka}
+\label{subsec:users-kafka}
+
+Apache Kafka используется в Users Service как интеграционный слой для событий, возникающих в результате бизнес-операций. Сервис не является потребителем сообщений; его роль -- публикация доменных событий, которые далее обрабатываются специализированными сервисами. Такой подход снижает связанность: Users Service не должен знать детали отправки email или внутренний процесс подтверждения файла в File Service.
+
+Выделяются два направления событий. Первое направление -- уведомления пользователей. События \texttt{UserCreatedEvent}, \texttt{ResetPasswordEvent} и \texttt{PasswordChangedEvent} публикуются в пользовательский топик и потребляются Notification Service. Второе направление -- интеграция с File Service. Событие \texttt{FileLoadedEvent} сообщает File Service, что файл был привязан к пользователю и может быть подтвержден на стороне файлового сервиса.
+
+\begin{table}[htbp]
+    \centering
+    \caption{Основные события Users Service}
+    \label{tab:users-events}
+    \small
+    \begin{tabular}{|p{3.8cm}|p{3cm}|p{6.4cm}|}
+        \hline
+        \textbf{Событие} & \textbf{Потребитель} & \textbf{Назначение} \\
+        \hline
+        \texttt{UserCreatedEvent} & Notification Service & Отправка письма новому пользователю с данными для первого входа \\
+        \hline
+        \texttt{ResetPasswordEvent} & Notification Service & Отправка письма со ссылкой или токеном восстановления пароля \\
+        \hline
+        \texttt{PasswordChangedEvent} & Notification Service & Уведомление пользователя об успешной смене пароля \\
+        \hline
+        \texttt{FileLoadedEvent} & File Service & Подтверждение файла, привязанного к профилю пользователя \\
+        \hline
+    \end{tabular}
+\end{table}
+
+Маршрутизация событий выполняется по типу события. События, связанные с пользователями и паролями, направляются в \texttt{user-topic}; событие подтверждения файла -- в \texttt{file-topic}. В качестве ключа сообщения используется идентификатор агрегата, что позволяет сохранять порядок событий одного агрегата в пределах партиции. Тип события дополнительно передается в заголовке \texttt{event\_type}, чтобы потребитель мог выбрать соответствующий обработчик.
+
+\image{seq-kafka-notification.png}{Доставка событий Users Service в Notification Service}{0.95}
+% UML source: seq-kafka-notification.puml -> seq-kafka-notification.png
+
+На диаграмме следует показать не пользовательский REST-flow, а именно интеграционную доставку: событие уже сформировано Users Service, затем outbox publisher отправляет его в Kafka, Notification Service читает сообщение, выбирает шаблон по типу события и отправляет email.
+
+\image{seq-kafka-file-loaded.png}{Доставка события FileLoadedEvent в File Service}{0.95}
+% UML source: seq-kafka-file-loaded.puml -> seq-kafka-file-loaded.png
+
+На диаграмме необходимо показать публикацию \texttt{FileLoadedEvent} из Users Service, доставку события через \texttt{file-topic}, обработку события File Service и подтверждение файла через проверку объекта в S3-совместимом хранилище. Генерация presigned URL и передача байтов файла в этой диаграмме не раскрываются, поскольку эти детали относятся к главе о File Service.
+
+Семантика доставки событий соответствует модели at-least-once: сообщение может быть доставлено потребителю более одного раза. Поэтому обработчики событий должны быть идемпотентными. Для Notification Service это означает защиту от повторной отправки одного и того же письма, а для File Service -- корректную обработку повторного \texttt{FileLoadedEvent} для уже подтвержденного файла.
+
+\subsection{Применение паттерна Transactional Outbox для гарантированной публикации событий}
+
+При публикации событий из сервиса возникает проблема двойной записи: изменение состояния в PostgreSQL и отправка сообщения в Kafka являются двумя разными операциями. Если после сохранения пользователя приложение завершится до отправки события, Notification Service не получит сообщение. Если же сообщение будет отправлено до фиксации транзакции, потребитель может увидеть событие о состоянии, которого фактически нет в БД. Для устранения этого класса ошибок в Users Service применяется паттерн Transactional Outbox.
+
+Суть решения заключается в том, что доменное изменение и запись события в таблицу \texttt{outbox.outbox\_message} выполняются в одной транзакции PostgreSQL. После commit отдельный фоновый процесс выбирает новые сообщения из outbox и отправляет их в Kafka. Таким образом, Kafka-публикация становится асинхронной, но событие не теряется при сбое между бизнес-операцией и отправкой сообщения.
+act-outbox-publisher
+Таблица \texttt{outbox.outbox\_message} содержит идентификатор сообщения, тип агрегата, идентификатор агрегата, тип события, JSONB payload, статус обработки и временные метки. Индекс по \texttt{(status, created\_at)} оптимизирует выборку новых сообщений. Фоновый publisher обрабатывает сообщения пакетами: выбирает записи со статусом \texttt{NEW}, публикует их в Kafka и после успешной отправки переводит в статус \texttt{SENT}.
+
+\image{act-outbox-publisher.png}{Публикация событий через Transactional Outbox}{0.92}
+% UML source: act-outbox-publisher.puml -> act-outbox-publisher.png
+
+Диаграмма должна показать цепочку: выполнение бизнес-операции, запись доменных данных, запись сообщения в outbox в той же транзакции, commit, запуск scheduler, захват ShedLock, пакетную отправку сообщений в Kafka и обновление статуса сообщения. ShedLock необходим при горизонтальном масштабировании, чтобы несколько экземпляров Users Service не обрабатывали один и тот же набор сообщений одновременно.
+
+\subsection{Оптимизация алгоритмов массового импорта пользователей из Excel}
+
+Массовый импорт используется для первичного наполнения платформы данными об учебной структуре, студентах и преподавателях. Администратор загружает Excel-файл, после чего Users Service выполняет потоковый разбор, валидацию строк, пакетное разрешение ссылок на группы и кафедры и пакетное сохранение данных. Такой механизм необходим, поскольку в реальном учебном заведении количество пользователей и элементов структуры может исчисляться тысячами записей.
+
+Наивная обработка Excel-файла через полную загрузку workbook в память плохо масштабируется. Поэтому в Users Service применяется streaming-подход на базе Apache POI: файл читается построчно, а в памяти удерживается только текущая строка и небольшой пакет записей. Это снижает потребление heap и позволяет обрабатывать крупные файлы без пропорционального роста памяти.
+
+Pipeline импорта разделен на этапы. Сначала выполняется чтение и валидация: проверяются обязательные поля, формат значений и существование связанных сущностей. Для снижения числа запросов к БД строки группируются в batch, после чего уникальные названия групп, кафедр или email проверяются через пакетные запросы. Количество возвращаемых ошибок ограничивается конфигурационным параметром, чтобы пользователь получил управляемый отчет, а сервис не формировал чрезмерно большой response.
+
+После успешной валидации выполняется пакетная запись. Для существующих записей применяется update, для новых -- insert с созданием учетной записи, роли и профиля. При создании новых пользователей инициируются те же доменные события, что и при ручном создании через административный API. Поэтому массовый импорт сохраняет единый жизненный цикл учетной записи: пользователь получает письмо через Notification Service и может выполнить первый вход с временным паролем.
+
+\image{act-excel-import.png}{Pipeline массового импорта пользователей из Excel}{0.92}
+% UML source: act-excel-import.puml -> act-excel-import.png
+
+На activity-диаграмме необходимо показать загрузку multipart-файла, streaming read, batch validation, ветку завершения с ошибками, batch upsert, публикацию событий для новых пользователей и возврат отчета импорта.
+
+
+================================================================================
+Исходные тексты UML-диаграмм PlantUML
+================================================================================
+
+Соответствие изображений и PlantUML-исходников:
+
+- users-service-component.png <- users-service-component.puml
+- users-service-er.png <- users-service-er.puml
+- seq-admin-create-user.png <- seq-admin-create-user.puml
+- seq-login.png <- seq-login.puml
+- seq-refresh-token.png <- seq-refresh-token.puml
+- seq-reset-password.png <- seq-reset-password.puml
+- seq-jwt-jwks-validation.png <- seq-jwt-jwks-validation.puml
+- seq-kafka-notification.png <- seq-kafka-notification.puml
+- seq-kafka-file-loaded.png <- seq-kafka-file-loaded.puml
+- act-outbox-publisher.png <- act-outbox-publisher.puml
+- act-excel-import.png <- act-excel-import.puml
+
+Диаграмма: users-service-component.puml
+
+@startuml users-service-component
+title Users Service в микросервисной архитектуре платформы
+
+actor "Студент" as Student
+actor "Преподаватель" as Teacher
+actor "Администратор" as Admin
+
+component "Frontend Application" as FE
+component "Users Service" as US
+component "Course Service" as CS
+component "File Service" as FS
+component "Notification Service" as NS
+database "PostgreSQL\n(users DB)" as DB
+queue "Apache Kafka" as Kafka
+
+Student --> FE
+Teacher --> FE
+Admin --> FE
+
+FE --> US : REST API\nlogin, profile, admin, hierarchy
+US --> DB : схемы users/hierarchy/auth/outbox/scheduler
+US --> Kafka : Domain events
+Kafka --> NS : user-topic events
+Kafka --> FS : file-topic events
+CS --> US : JWKS / user data
+FS --> US : JWKS validation keys
+US --> FS : file metadata check\nfor avatar binding
+
+note right of US
+  Провайдер идентификации
+  Управление пользователями
+  Учебная структура вуза
+  Выпуск JWT и JWKS
+end note
+
+@enduml
+
+
+Диаграмма: users-service-er.puml
+
+@startuml users-service-er
+title ER-модель БД Users Service
+
+skinparam linetype ortho
+skinparam packageStyle rectangle
+
+package "users" {
+  entity "users" as users {
+    * id : UUID <<PK>>
+    --
+    username : VARCHAR <<UK>>
+    email : VARCHAR <<UK>>
+    password : VARCHAR
+    first_name : VARCHAR
+    last_name : VARCHAR
+    middle_name : VARCHAR
+    is_active : BOOLEAN
+    avatar_file_id : UUID <<external>>
+    created_at, created_by
+    updated_at, updated_by
+  }
+
+  entity "roles" as roles {
+    * id : INT <<PK>>
+    --
+    name : VARCHAR <<UK>>
+  }
+
+  entity "users_roles" as users_roles {
+    * user_id : UUID <<PK, FK>>
+    * role_id : INT <<PK, FK>>
+  }
+
+  entity "student_profiles" as student_profiles {
+    * user_id : UUID <<PK, FK>>
+    --
+    group_id : BIGINT <<FK>>
+    department_id : BIGINT <<FK, nullable>>
+  }
+
+  entity "teacher_profiles" as teacher_profiles {
+    * user_id : UUID <<PK, FK>>
+    --
+    department_id : BIGINT <<FK>>
+  }
+
+  entity "teacher_group_access_scopes" as scopes {
+    * teacher_id : UUID <<PK, FK>>
+    * scope_type : VARCHAR <<PK>>
+    * scope_id : BIGINT <<PK>>
+  }
+}
+
+package "hierarchy" {
+  entity "faculties" as faculties {
+    * id : BIGINT <<PK>>
+    --
+    name : VARCHAR
+    short_name : VARCHAR
+  }
+
+  entity "departments" as departments {
+    * id : BIGINT <<PK>>
+    --
+    name : VARCHAR
+    faculty_id : BIGINT <<FK>>
+  }
+
+  entity "fields_of_study" as fields {
+    * id : BIGINT <<PK>>
+    --
+    name : VARCHAR
+    faculty_id : BIGINT <<FK>>
+  }
+
+  entity "student_groups" as groups {
+    * id : BIGINT <<PK>>
+    --
+    name : VARCHAR
+    faculty_id : BIGINT <<FK>>
+    field_of_study_id : BIGINT <<FK>>
+  }
+}
+
+package "auth" {
+  entity "refresh_token" as refresh_token {
+    * id : UUID <<PK>>
+    --
+    token_hash : VARCHAR <<UK>>
+    user_id : UUID <<FK>>
+    expiry_at : TIMESTAMPTZ
+    created_at : TIMESTAMPTZ
+  }
+
+  entity "reset_password_token" as reset_token {
+    * id : UUID <<PK>>
+    --
+    token_hash : VARCHAR <<UK>>
+    user_id : UUID <<FK>>
+    expiry_at : TIMESTAMPTZ
+    created_at : TIMESTAMPTZ
+  }
+}
+
+package "outbox" {
+  entity "outbox_message" as outbox {
+    * id : UUID <<PK>>
+    --
+    aggregate_type : VARCHAR
+    aggregate_id : VARCHAR
+    type : VARCHAR
+    payload : JSONB
+    status : VARCHAR
+    created_at : TIMESTAMPTZ
+    processed_at : TIMESTAMPTZ
+  }
+}
+
+package "scheduler" {
+  entity "shedlock" as shedlock {
+    * name : VARCHAR <<PK>>
+    --
+    lock_until : TIMESTAMP
+    locked_at : TIMESTAMP
+    locked_by : VARCHAR
+  }
+}
+
+users ||--o{ users_roles
+roles ||--o{ users_roles
+users ||--o| student_profiles
+users ||--o| teacher_profiles
+users ||--o{ refresh_token
+users ||--o{ reset_token
+
+faculties ||--o{ departments
+faculties ||--o{ fields
+faculties ||--o{ groups
+fields ||--o{ groups
+groups ||--o{ student_profiles
+departments ||--o{ student_profiles
+departments ||--o{ teacher_profiles
+teacher_profiles ||--o{ scopes
+
+note bottom of users
+\texttt{avatar_file_id} -- внешняя ссылка
+на File Service. FK в PostgreSQL отсутствует,
+так как файл принадлежит другому микросервису.
+end note
+
+note bottom of scopes
+\texttt{scope_id} -- логическая ссылка.
+Целевая таблица определяется по \texttt{scope_type}:
+группа, направление подготовки или факультет.
+end note
+
+@enduml
+
+
+Диаграмма: seq-admin-create-user.puml
+
+@startuml seq-admin-create-user
+title Создание пользователя администратором
+
+actor "Администратор" as Admin
+participant "Frontend" as FE
+participant "Users Service" as US
+database "PostgreSQL" as DB
+participant "Outbox Publisher" as Publisher
+queue "Kafka\nuser-topic" as Kafka
+participant "Notification Service" as NS
+actor "Новый пользователь" as User
+
+Admin -> FE : Заполняет форму пользователя
+FE -> US : POST /admin/users
+US -> DB : Проверка username/email
+US -> US : Генерация временного пароля
+US -> DB : INSERT users, users_roles,\nstudent/teacher profile
+US -> DB : INSERT outbox_message\nUserCreatedEvent
+US --> FE : 201 Created
+
+... асинхронная публикация ...
+
+Publisher -> DB : SELECT outbox_message\nstatus=NEW
+Publisher -> Kafka : publish UserCreatedEvent
+Publisher -> DB : UPDATE status=SENT
+Kafka -> NS : consume UserCreatedEvent
+NS -> User : Email с временным паролем
+
+@enduml
+
+
+Диаграмма: seq-login.puml
+
+@startuml seq-login
+title Вход пользователя
+
+actor "Пользователь" as User
+participant "Frontend" as FE
+participant "Users Service" as US
+database "PostgreSQL" as DB
+
+User -> FE : username/email + password
+FE -> US : POST /auth/login
+US -> DB : SELECT user and roles
+US -> US : Сравнение пароля с hash
+US -> US : Генерация access JWT\nRS256, sub, roles
+US -> US : Генерация refresh token
+US -> DB : INSERT auth.refresh_token\nтолько hash
+US --> FE : 200 accessToken\nSet-Cookie refreshToken HttpOnly
+FE --> User : Пользователь авторизован
+
+@enduml
+
+
+Диаграмма: seq-refresh-token.puml
+
+@startuml seq-refresh-token
+title Refresh-token flow
+
+actor "Пользователь" as User
+participant "Frontend" as FE
+participant "Users Service" as US
+database "PostgreSQL" as DB
+
+User -> FE : Продолжает работу
+FE -> US : GET /auth/refresh\nCookie refreshToken
+US -> US : hash(refreshToken)
+US -> DB : SELECT auth.refresh_token
+
+alt token invalid or expired
+  US --> FE : 401 Unauthorized
+else token valid
+  US -> US : Генерация нового access JWT
+  US -> US : Генерация нового refresh token
+  US -> DB : UPDATE token_hash, expiry_at
+  US --> FE : 200 accessToken\nSet-Cookie new refreshToken
+end
+
+@enduml
+
+
+Диаграмма: seq-reset-password.puml
+
+@startuml seq-reset-password
+title Восстановление пароля
+
+actor "Пользователь" as User
+participant "Frontend" as FE
+participant "Users Service" as US
+database "PostgreSQL" as DB
+participant "Outbox Publisher" as Publisher
+queue "Kafka\nuser-topic" as Kafka
+participant "Notification Service" as NS
+
+== Forgot password ==
+User -> FE : Вводит email
+FE -> US : POST /auth/forgot-password
+US -> DB : SELECT user BY email
+US -> US : Генерация reset token
+US -> DB : INSERT reset_password_token\nтолько hash
+US -> DB : INSERT outbox_message\nResetPasswordEvent
+US --> FE : 204 No Content
+Publisher -> DB : SELECT outbox_message\nstatus=NEW
+Publisher -> Kafka : publish ResetPasswordEvent
+Publisher -> DB : UPDATE status=SENT
+Kafka -> NS : consume ResetPasswordEvent
+NS -> User : Email со ссылкой восстановления
+
+== Reset password ==
+User -> FE : token + new password
+FE -> US : POST /auth/reset-password
+US -> US : hash(token)
+US -> DB : SELECT reset_password_token
+US -> DB : UPDATE users.password\nnew hash
+US -> DB : INSERT outbox_message\nPasswordChangedEvent
+US --> FE : 204 No Content
+
+@enduml
+
+
+Диаграмма: seq-jwt-jwks-validation.puml
+
+@startuml seq-jwt-jwks-validation
+title Проверка JWT через JWKS
+
+actor "Клиент" as Client
+participant "Downstream Service" as DS
+participant "Users Service\nJWKS issuer" as US
+database "JWKS Cache" as Cache
+
+== Получение публичных ключей ==
+DS -> US : GET /.well-known/jwks.json
+US --> DS : JWKS with RSA public key\nkid, kty, n, e, alg=RS256
+DS -> Cache : Кэширование публичного ключа\nпо kid
+
+== Проверка запроса ==
+Client -> DS : Запрос\nAuthorization: Bearer JWT
+DS -> DS : Read JWT header and kid
+DS -> Cache : Load public key
+DS -> DS : Verify RS256 signature
+DS -> DS : Validate exp, iat, sub, roles
+
+alt token valid
+  DS --> Client : Продолжение обработки запроса
+else token invalid
+  DS --> Client : 401 Unauthorized
+end
+
+@enduml
+
+
+Диаграмма: seq-kafka-notification.puml
+
+@startuml seq-kafka-notification
+title Kafka-интеграция Users Service и Notification Service
+
+participant "Users Service" as US
+database "outbox.outbox_message" as Outbox
+participant "Outbox Publisher" as Publisher
+queue "Kafka\nuser-topic" as Kafka
+participant "Notification Service" as NS
+actor "Пользователь" as User
+
+US -> Outbox : INSERT event\nstatus=NEW
+Publisher -> Outbox : SELECT NEW events
+Publisher -> Kafka : Publish event\nkey=aggregateId\nheader event_type
+Publisher -> Outbox : UPDATE status=SENT
+Kafka -> NS : Consume event
+NS -> NS : Select email template\nby event_type
+NS -> User : Send email
+
+note over Kafka, NS
+Модель доставки: at-least-once.
+Обработка на стороне consumer должна быть идемпотентной.
+end note
+
+@enduml
+
+
+Диаграмма: seq-kafka-file-loaded.puml
+
+@startuml seq-kafka-file-loaded
+title Kafka-интеграция FileLoadedEvent
+
+participant "Users Service" as US
+database "PostgreSQL\nusers" as UDB
+database "outbox.outbox_message" as Outbox
+participant "Outbox Publisher" as Publisher
+queue "Kafka\nfile-topic" as Kafka
+participant "File Service" as FS
+database "PostgreSQL\nfiles" as FDB
+cloud "MinIO / S3" as S3
+
+US -> UDB : UPDATE avatar_file_id
+US -> Outbox : INSERT FileLoadedEvent\nstatus=NEW
+Publisher -> Outbox : SELECT NEW events
+Publisher -> Kafka : Publish FileLoadedEvent
+Publisher -> Outbox : UPDATE status=SENT
+Kafka -> FS : Consume FileLoadedEvent
+FS -> FDB : Load file metadata
+FS -> S3 : HeadObject
+FS -> FDB : UPDATE status=ACTIVE
+
+@enduml
+
+
+Диаграмма: act-outbox-publisher.puml
+
+@startuml act-outbox-publisher
+title Transactional Outbox publisher
+
+start
+:Бизнес-операция;
+:Сохранение доменных данных;
+:Save outbox_message\nstatus=NEW;
+:Commit транзакции PostgreSQL;
+
+partition "Scheduled publisher with ShedLock" {
+  :Acquire ShedLock;
+  if (lock acquired?) then (yes)
+    :Select batch of NEW messages;
+    while (message exists?) is (yes)
+      :Route by event type;
+      :Publish to Kafka;
+      :Mark message as SENT;
+    endwhile (no)
+    :Release ShedLock;
+  else (no)
+    :Skip this iteration;
+  endif
+}
+
+stop
+
+@enduml
+
+
+Диаграмма: act-excel-import.puml
+
+@startuml act-excel-import
+title Pipeline массового импорта из Excel
+
+start
+:Администратор загружает Excel-файл;
+:Проверка типа и размера файла;
+:Потоковое чтение строк\nApache POI event model;
+:Accumulate batch;
+:Пакетная валидация\nобязательные поля, ссылки, дубликаты;
+
+if (errors found?) then (yes)
+  :Возврат отчета об ошибках;
+  stop
+else (no)
+  :Повторное потоковое чтение строк;
+  :Resolve references by batch queries;
+  :Bulk upsert users/profiles;
+  :Create UserCreatedEvent\nfor new users;
+  :Возврат ImportResultResponse;
+endif
+
+stop
+
+@enduml

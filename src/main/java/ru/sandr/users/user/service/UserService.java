@@ -19,6 +19,7 @@ import ru.sandr.users.security.service.AuthenticationService;
 import ru.sandr.users.user.dto.ChangeAvatarRequestDto;
 import ru.sandr.users.user.dto.ChangePasswordRequest;
 import ru.sandr.users.user.dto.UpdateOwnProfileRequest;
+import ru.sandr.users.user.dto.CurrentUserProfileResponse;
 import ru.sandr.users.user.dto.UserResponse;
 import ru.sandr.users.user.entity.User;
 import ru.sandr.users.user.events.FileLoadedEvent;
@@ -43,9 +44,14 @@ public class UserService {
         return userRepository.findByUsernameOrEmail(loginInput, loginInput);
     }
 
+    @Transactional(readOnly = true)
+    public CurrentUserProfileResponse getCurrentUser() {
+        return userMapper.toCurrentUserProfile(loadCurrentUser());
+    }
+
     @Transactional
     public UserResponse changeOwnProfile(UpdateOwnProfileRequest request) {
-        User current = getCurrentUser();
+        User current = loadCurrentUser();
         String newEmail = StringUtils.trim(request.email());
         if (Objects.equals(newEmail, current.getEmail())) {
             return userMapper.toResponse(current);
@@ -61,10 +67,11 @@ public class UserService {
         return userMapper.toResponse(userRepository.save(current));
     }
 
-    private User getCurrentUser() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        UUID userId = extractCurrentUserId(auth);
-        return userRepository.findById(userId)
+    private User loadCurrentUser() {
+        UUID userId = extractCurrentUserId(
+                SecurityContextHolder.getContext().getAuthentication()
+        );
+        return userRepository.findByIdWithDetails(userId)
                              .orElseThrow(() -> new ObjectNotFoundException(
                                      "USER_NOT_FOUND",
                                      "User not found: " + userId

@@ -88,16 +88,13 @@ public class AdminUserService {
                         .updatedBy(actor)
                         .build();
 
-        User savedUser = userRepository.save(user);
-
         UserRole userRole = UserRole.builder()
-                                    .id(new UserRoleId(savedUser.getId(), role.getId()))
-                                    .user(savedUser)
+                                    .user(user)
                                     .role(role)
                                     .build();
-        userRoleRepository.save(userRole);
-        // Это нужно, поскольку мы будем отдавать на фронт mapping из savedUser
-        savedUser.getUserRoles().add(userRole);
+        user.getUserRoles().add(userRole);
+
+        User savedUser = userRepository.save(user);
 
         if (request.role() == RoleName.ROLE_STUDENT) {
             createProfileForStudent(request, savedUser);
@@ -127,8 +124,8 @@ public class AdminUserService {
                                                      "DEPARTMENT_NOT_FOUND",
                                                      "Department not found: " + request.departmentId()
                                              ));
-        var teacherProfile = TeacherProfile.builder().user(savedUser).department(department).build();
-        teacherProfileRepository.save(teacherProfile);
+        savedUser.setTeacherProfile(TeacherProfile.builder().user(savedUser).department(department).build());
+        userRepository.save(savedUser);
     }
 
     private void createProfileForStudent(CreateUserRequest request, User savedUser) {
@@ -140,7 +137,8 @@ public class AdminUserService {
                                                   "STUDENT_GROUP_NOT_FOUND",
                                                   "Student group not found: " + request.groupId()
                                           ));
-        studentProfileRepository.save(StudentProfile.builder().user(savedUser).group(group).build());
+        savedUser.setStudentProfile(StudentProfile.builder().user(savedUser).group(group).build());
+        userRepository.save(savedUser);
     }
 
     @Transactional

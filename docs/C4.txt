@@ -1,0 +1,160 @@
+workspace "E-Learning Platform" "Платформа для обучения студентов" {
+
+    model {
+        // --- Пользователи (Actors) ---
+        student = person "Студент" "Проходит обучение, смотрит курсы, сдает задания." {
+            tags "Actor"
+        }
+        teacher = person "Преподаватель" "Создает курсы, загружает материалы, проверяет задания." {
+            tags "Actor"
+        }
+        admin = person "Администратор" "Управляет платформой, пользователями и настройками." {
+            tags "Actor"
+        }
+
+        // --- Внешние системы ---
+        emailProvider = softwareSystem "Email Provider" "Внешний сервис для отправки email сообщений." {
+            tags "External System"
+        }
+
+        // --- Наша система ---
+        eLearningSystem = softwareSystem "Платформа обучения" "Основная система управления курсами и студентами." {
+
+            frontend = container "Frontend Application" "Пользовательский интерфейс платформы." "Vue.js" {
+                tags "Web Browser"
+            }
+
+            usersService = container "Users Service" "Управление профилями, авторизацией и настройками." "Java" {
+                tags "Microservice"
+            }
+            fileService = container "File Service" "Работа с S3, генерация Presigned URL, учет файлов." "Java" {
+                tags "Microservice"
+            }
+            courseService = container "Course Service" "Бизнес-логика курсов, уроков и прогресса." "Go" {
+                tags "Microservice"
+            }
+            notificationService = container "Notification Service" "Формирование и отправка уведомлений." "Go" {
+                tags "Microservice"
+            }
+
+            db = container "PostgreSQL" "Хранение реляционных данных сервисов." "PostgreSQL" {
+                tags "Database"
+            }
+            kafka = container "Kafka" "Брокер сообщений для асинхронного взаимодействия." "Apache Kafka" {
+                tags "Message Broker"
+            }
+            minio = container "MinIO" "S3-совместимое объектное хранилище." "MinIO" {
+                tags "Storage"
+            }
+            observability = container "Observability Stack" "Сбор логов, метрик и трейсов." "Grafana, Prometheus, Loki, Alloy, Tempo" {
+                tags "Observability"
+            }
+        }
+
+        // --- Взаимодействия (Relationships) ---
+        student -> frontend "Использует платформу" "HTTPS" "fdlskfds"
+        teacher -> frontend "Использует платформу" "HTTPS"
+        admin -> frontend "Администрирует" "HTTPS"
+
+        frontend -> usersService "Запрашивает данные" "REST/JSON"
+        frontend -> courseService "Запрашивает данные" "REST/JSON"
+        frontend -> fileService "Запрашивает данные" "REST/JSON"
+        frontend -> minio "Загружает/скачивает файлы" "Presigned URL"
+
+        usersService -> db "Чтение/запись данных"
+        usersService -> kafka "Публикует события" "TCP"
+
+        fileService -> minio "Генерирует presigned URL" "AWS S3 API"
+        fileService -> db "Чтение/запись данных"
+
+        courseService -> db "Чтение/запись данных"
+        courseService -> usersService "Запрос пользователей" "REST/JSON"
+        courseService -> fileService "Запрос URL для файлов" "REST/JSON"
+        courseService -> kafka "Публикует события" "TCP"
+
+        notificationService -> kafka "Читает события" "TCP"
+        notificationService -> db "Чтение/запись данных"
+        notificationService -> emailProvider "Инициирует отправку" "API/SMTP"
+
+        // ИСПРАВЛЕНО ТУТ: синтаксис -> <источник> -> <цель> "Описание" "Технология" "Теги"
+        usersService -> observability "Экспортирует телеметрию" "OTLP" "telemetry"
+        fileService -> observability "Экспортирует телеметрию" "OTLP" "telemetry"
+        courseService -> observability "Экспортирует телеметрию" "OTLP" "telemetry"
+        notificationService -> observability "Экспортирует телеметрию" "OTLP" "telemetry"
+        db -> observability "Экспортирует метрики" "" "telemetry"
+        kafka -> observability "Экспортирует метрики" "" "telemetry"
+        minio -> observability "Экспортирует метрики" "" "telemetry"
+    }
+
+    views {
+        systemContext eLearningSystem "SystemContext" {
+            include *
+            autolayout tb
+        }
+
+        container eLearningSystem "Containers" {
+            include observability frontend usersService fileService notificationService db kafka minio
+            autolayout tb
+        }
+
+        container eLearningSystem "AuthorResponsibility" {
+            include observability usersService fileService db kafka minio
+            autolayout tb
+        }
+
+        styles {
+            element "Actor" {
+                background #08427b
+                color #ffffff
+                shape Person
+            }
+            element "Software System" {
+                background #1168bd
+                color #ffffff
+            }
+            element "External System" {
+                background #999999
+                color #ffffff
+            }
+            element "Container" {
+                background #438dd5
+                color #ffffff
+            }
+            element "Microservice" {
+                background #438dd5
+                color #ffffff
+                shape Hexagon
+            }
+            element "Web Browser" {
+                background #438dd5
+                color #ffffff
+                shape WebBrowser
+            }
+            element "Database" {
+                background #438dd5
+                color #ffffff
+                shape Cylinder
+            }
+            element "Storage" {
+                background #438dd5
+                color #ffffff
+                shape Folder
+            }
+            element "Message Broker" {
+                background #438dd5
+                color #ffffff
+                shape Pipe
+            }
+            element "Observability" {
+                background #666666
+                color #ffffff
+                shape RoundedBox
+            }
+            relationship "telemetry" {
+                color #999999
+                dashed true
+                opacity 50
+            }
+        }
+    }
+}

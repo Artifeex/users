@@ -1,0 +1,42 @@
+auth_enabled: false # Отключаем мультиарендность (multi-tenancy). Нам для одного проекта это не нужно.
+
+server:
+  http_listen_port: 3100
+  grpc_listen_port: 9095
+
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /tmp/loki
+  storage:
+    filesystem:
+      chunks_directory: /tmp/loki/chunks
+      rules_directory: /tmp/loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: 2020-10-24
+      store: tsdb # Используем современный формат хранения индексов Loki 3.x
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+# ВОТ ОНО! Решение проблемы с переполнением диска:
+limits_config:
+  retention_period: 72h # Храним логи только за последние 3 дня.
+  max_query_length: 72h 
+  reject_old_samples: true
+  reject_old_samples_max_age: 168h # Отклонять логи, которые пришли с опозданием более чем на 7 дней
+
+# Включаем компонент, который физически удаляет старые файлы с диска
+compactor:
+  working_directory: /tmp/loki/compactor
+  retention_enabled: true # Обязательно true, иначе retention_period не сработает
+  compaction_interval: 10m # Как часто проверять, не пора ли что-то удалить
+  retention_delete_delay: 2h
+  retention_delete_worker_count: 150

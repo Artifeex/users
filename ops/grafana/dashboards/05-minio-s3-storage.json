@@ -188,16 +188,29 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
+            "mode": "thresholds"
           },
-          "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 18,
-            "lineWidth": 2,
-            "showPoints": "never",
-            "spanNulls": true
+          "decimals": 2,
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
           },
-          "unit": "ops"
+          "unit": "percent"
         },
         "overrides": []
       },
@@ -208,6 +221,142 @@
         "y": 11
       },
       "id": 5,
+      "options": {
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-main"
+          },
+          "editorMode": "code",
+          "expr": "100 * clamp_min((sum(rate(minio_s3_requests_errors_total[5m])) - sum(rate(minio_s3_requests_4xx_errors_total[5m]))) / sum(rate(minio_s3_requests_total[5m])), 0)",
+          "legendFormat": "S3 5xx %",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "S3 API 5xx Error Rate %",
+      "type": "gauge"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 20
+      },
+      "id": 6,
+      "panels": [],
+      "title": "Row 3: Bucket Distribution & Data Flow",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-main"
+      },
+      "description": "Распределение занятого объема по bucket. Помогает быстро увидеть, какой bucket потребляет основную часть хранилища.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "continuous-GrYlRd"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 0,
+        "y": 21
+      },
+      "id": 7,
+      "options": {
+        "displayMode": "gradient",
+        "minVizHeight": 16,
+        "minVizWidth": 8,
+        "namePlacement": "left",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "sizing": "auto",
+        "valueMode": "color"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-main"
+          },
+          "editorMode": "code",
+          "expr": "sum by (bucket) (minio_bucket_usage_total_bytes{job=\"minio-bucket\",bucket=~\"$bucket\"})",
+          "instant": true,
+          "legendFormat": "{{bucket}}",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Bucket Storage Distribution",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-main"
+      },
+      "description": "RPS для ключевых S3 операций: upload vs download.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 12,
+            "lineWidth": 2,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 21
+      },
+      "id": 8,
       "options": {
         "legend": {
           "calcs": [
@@ -230,13 +379,95 @@
             "uid": "prometheus-main"
           },
           "editorMode": "code",
-          "expr": "sum by (api) (rate(minio_s3_requests_errors_total{error_code=~\"5..\"}[1m]))",
-          "legendFormat": "{{api}}",
+          "expr": "sum(rate(minio_s3_requests_total{api=~\"putobject|copyobject|completemultipartupload|newmultipartupload|uploadpart\"}[1m]))",
+          "legendFormat": "Upload RPS",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-main"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(minio_s3_requests_total{api=~\"getobject|headobject|selectobjectcontent\"}[1m]))",
+          "legendFormat": "Download RPS",
+          "range": true,
+          "refId": "B"
         }
       ],
-      "title": "S3 API Errors",
+      "title": "Upload / Download RPS",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-main"
+      },
+      "description": "Сетевой профиль S3: входящий и исходящий трафик в байтах/сек.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 12,
+            "lineWidth": 2,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "unit": "Bps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 31
+      },
+      "id": 9,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-main"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(minio_s3_traffic_received_bytes[1m]))",
+          "legendFormat": "Ingress",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-main"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(minio_s3_traffic_sent_bytes[1m]))",
+          "legendFormat": "Egress",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "S3 Ingress / Egress Traffic",
       "type": "timeseries"
     }
   ],
@@ -264,6 +495,31 @@
         "query": ".*",
         "skipUrlSync": false,
         "type": "constant"
+      },
+      {
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus-main"
+        },
+        "definition": "label_values(minio_bucket_usage_total_bytes{job=\"minio-bucket\"}, bucket)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Bucket",
+        "multi": true,
+        "name": "bucket",
+        "options": [],
+        "query": "label_values(minio_bucket_usage_total_bytes{job=\"minio-bucket\"}, bucket)",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
       }
     ]
   },
@@ -275,6 +531,6 @@
   "timezone": "",
   "title": "05 - MinIO / S3 Storage",
   "uid": "minio-s3-storage",
-  "version": 1,
+  "version": 3,
   "weekStart": ""
 }

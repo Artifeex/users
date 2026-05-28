@@ -31,7 +31,7 @@ import ru.sandr.users.hierarchy.service.StudentGroupService;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/hierarchy/student-groups")
+@RequestMapping("/api/v1/hierarchy/student-groups")
 @Tag(name = "Hierarchy")
 @SecurityRequirement(name = "bearerAuth")
 public class StudentGroupController {

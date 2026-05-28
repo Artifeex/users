@@ -112,9 +112,25 @@ services:
     depends_on:
       - prometheus
     restart: unless-stopped
+  loki:
+    image: grafana/loki:3.0.0
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/loki-config.yaml
+    volumes:
+      # Пробрасываем наш конфиг внутрь контейнера
+      - ./users/ops/loki/loki-config.yaml:/etc/loki/loki-config.yaml:ro
+      # Данные храним в volume, чтобы при рестарте контейнера логи за 3 дня не пропали
+      - loki-data:/tmp/loki
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3100/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 
 volumes:
   users-db-data:
   prometheus-data:
   grafana-data:
-
+  loki-data:

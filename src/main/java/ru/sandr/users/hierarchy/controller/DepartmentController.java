@@ -31,7 +31,7 @@ import ru.sandr.users.hierarchy.service.DepartmentService;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/hierarchy/departments")
+@RequestMapping("/api/v1/hierarchy/departments")
 @Tag(name = "Hierarchy")
 @SecurityRequirement(name = "bearerAuth")
 public class DepartmentController {

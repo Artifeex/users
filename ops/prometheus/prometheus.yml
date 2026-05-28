@@ -30,8 +30,17 @@ scrape_configs:
     static_configs:
       - targets: ["kafka-exporter:9308"] # Указываем target(host:port) до kafka-exporter. А вот path будет использоваться дефолтный для всех scrapper = /metrics.
 
+  - job_name: "kafka-jmx"
+    static_configs:
+      - targets: ["kafka-jmx-exporter:5556"]
+
   - job_name: "minio"
     metrics_path: /minio/v2/metrics/cluster
+    static_configs:
+      - targets: ["minio:9000"]
+
+  - job_name: "minio-bucket"
+    metrics_path: /minio/v2/metrics/bucket
     static_configs:
       - targets: ["minio:9000"]
 

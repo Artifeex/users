@@ -32,7 +32,7 @@ import java.util.UUID;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/admin/teachers")
+@RequestMapping("/api/v1/admin/teachers")
 @Tag(name = "Teacher Access")
 @SecurityRequirement(name = "bearerAuth")
 public class TeacherGroupAccessController {
