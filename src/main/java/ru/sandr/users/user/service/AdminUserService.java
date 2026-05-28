@@ -89,6 +89,7 @@ public class AdminUserService {
                         .build();
 
         UserRole userRole = UserRole.builder()
+                                    .id(new UserRoleId())
                                     .user(user)
                                     .role(role)
                                     .build();

@@ -32,9 +32,9 @@ import java.util.UUID;
 public class User extends AuditableEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", columnDefinition = "uuid")
-    private UUID id;
+    @Builder.Default
+    private UUID id = UUID.randomUUID();
 
     @Column(name = "username", unique = true, nullable = false)
     private String username;
