@@ -77,7 +77,7 @@ public class SecurityConfig {
                                        .requestMatchers(HttpMethod.PATCH, "/us/api/v1/hierarchy/**").hasRole("ADMIN")
                                        .requestMatchers(HttpMethod.DELETE, "/us/api/v1/hierarchy/**").hasRole("ADMIN")
                                        .requestMatchers("/us/api/v1/admin/**").hasRole("ADMIN")
-                                       .requestMatchers("/us/api/v1/teachers/**").hasRole("TEACHER")
+                                       .requestMatchers("/us/api/v1/teachers/**").hasAnyRole("TEACHER", "ADMIN")
                                        .requestMatchers("/us/api/v1/import/**").hasRole("ADMIN")
                                        .anyRequest().authenticated()
                    ).exceptionHandling(customizer ->
