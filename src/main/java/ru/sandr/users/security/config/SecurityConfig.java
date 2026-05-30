@@ -71,7 +71,7 @@ public class SecurityConfig {
                                        .permitAll()
                                        .requestMatchers("/api/v1/auth/**").permitAll()
                                        .requestMatchers("/error").permitAll()
-                                       .requestMatchers("/api/v1/.well-known/jwks.json").permitAll()
+                                       .requestMatchers("/.well-known/jwks.json").permitAll()
                                        .requestMatchers(HttpMethod.GET, "/api/v1/hierarchy/**").authenticated()
                                        .requestMatchers(HttpMethod.POST, "/api/v1/hierarchy/**").hasRole("ADMIN")
                                        .requestMatchers(HttpMethod.PATCH, "/api/v1/hierarchy/**").hasRole("ADMIN")
