@@ -361,6 +361,25 @@ public class AdminUserService {
     }
 
     @Transactional(readOnly = true)
+    public List<AdminUserDetailsResponse> getUserDetailsByIds(List<UUID> ids) {
+        if (CollectionUtils.isEmpty(ids)) {
+            return List.of();
+        }
+        Map<UUID, User> usersById = userRepository.findAllByIdInWithDetails(ids)
+                                                  .stream()
+                                                  .collect(Collectors.toMap(
+                                                          User::getId,
+                                                          Function.identity(),
+                                                          (a, b) -> a
+                                                  ));
+        return ids.stream()
+                  .map(usersById::get)
+                  .filter(Objects::nonNull)
+                  .map(userMapper::toAdminDetailsResponse)
+                  .toList();
+    }
+
+    @Transactional(readOnly = true)
     public PageResponse<AdminUserSearchResponse> searchUsers(UserSearchFilter filter, Pageable pageable) {
         Specification<User> spec = buildSpecification(filter);
         Pageable safetyPageable = PageableValidator.validateAndMap(pageable, Map.of("lastName", "lastName"));

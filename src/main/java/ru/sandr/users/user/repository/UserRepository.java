@@ -65,6 +65,22 @@ public interface UserRepository extends JpaRepository<User, UUID>, JpaSpecificat
     @Query("SELECT u FROM User u WHERE u.id = :id")
     Optional<User> findByIdWithDetails(@Param("id") UUID id);
 
+    @EntityGraph(attributePaths = {
+            "userRoles",
+            "userRoles.role",
+            "teacherProfile",
+            "teacherProfile.department",
+            "teacherProfile.department.faculty",
+            "studentProfile",
+            "studentProfile.department",
+            "studentProfile.department.faculty",
+            "studentProfile.group",
+            "studentProfile.group.faculty",
+            "studentProfile.group.fieldOfStudy"
+    })
+    @Query("SELECT DISTINCT u FROM User u WHERE u.id IN :ids")
+    List<User> findAllByIdInWithDetails(@Param("ids") Collection<UUID> ids);
+
     Optional<User> findByUsername(String username);
 
     interface EmailUsernameProjection {

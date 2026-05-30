@@ -27,6 +27,7 @@ import org.springdoc.core.annotations.ParameterObject;
 import ru.sandr.users.core.dto.ApiErrorResponse;
 import ru.sandr.users.core.dto.PageResponse;
 import ru.sandr.users.user.dto.AdminUserDetailsResponse;
+import ru.sandr.users.user.dto.AdminUserIdsRequest;
 import ru.sandr.users.user.dto.AdminUserSearchResponse;
 import ru.sandr.users.user.dto.CreateUserRequest;
 import ru.sandr.users.user.dto.UpdateUserByAdminRequest;
@@ -34,6 +35,7 @@ import ru.sandr.users.user.dto.UserResponse;
 import ru.sandr.users.user.dto.UserSearchFilter;
 import ru.sandr.users.user.service.AdminUserService;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -94,6 +96,17 @@ public class AdminController {
     })
     public AdminUserDetailsResponse getUserDetails(@PathVariable UUID id) {
         return adminUserService.getUserDetails(id);
+    }
+
+    @PostMapping("/details")
+    @Operation(summary = "Get user details by ids", description = "Returns admin details for existing users in request order. Missing ids are omitted.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "User details list"),
+            @ApiResponse(responseCode = "400", description = "Validation error",
+                    content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+    })
+    public List<AdminUserDetailsResponse> getUserDetailsByIds(@Valid @RequestBody AdminUserIdsRequest request) {
+        return adminUserService.getUserDetailsByIds(request.ids());
     }
 
     @GetMapping

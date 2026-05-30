@@ -4,10 +4,13 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.List;
+import java.util.UUID;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Schema(description = "Detailed user profile for admin view")
 public record AdminUserDetailsResponse(
+        @Schema(description = "User id", example = "550e8400-e29b-41d4-a716-446655440000")
+        UUID id,
         @Schema(description = "First name", example = "Ivan")
         String firstName,
         @Schema(description = "Middle name", example = "Sergeevich")
