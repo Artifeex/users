@@ -11,6 +11,7 @@ import ru.sandr.users.core.validation.PageableValidator;
 import ru.sandr.users.hierarchy.service.FacultyService;
 import ru.sandr.users.hierarchy.service.FieldOfStudyService;
 import ru.sandr.users.hierarchy.service.StudentGroupService;
+import ru.sandr.users.teacheraccess.dto.TeacherGroupAccessScopeDetailsResponse;
 import ru.sandr.users.teacheraccess.dto.TeacherGroupAccessScopeRequest;
 import ru.sandr.users.user.dto.RoleName;
 import ru.sandr.users.user.entity.TeacherProfile;
@@ -65,6 +66,20 @@ public class TeacherGroupAccessService {
         return toScopeResponse(saved);
     }
 
+    @Transactional
+    public void deleteTeacherScope(UUID teacherId, TeacherGroupAccessScopeType scopeType, Long scopeId) {
+        ensureTeacherIsValid(teacherId);
+        TeacherGroupAccessScopeId id = new TeacherGroupAccessScopeId(teacherId, scopeType, scopeId);
+        if (!teacherGroupAccessScopeRepository.existsById(id)) {
+            throw new ObjectNotFoundException(
+                    "TEACHER_GROUP_ACCESS_SCOPE_NOT_FOUND",
+                    "Teacher scope not found for teacherId=%s, scopeType=%s, scopeId=%s"
+                            .formatted(teacherId, scopeType, scopeId)
+            );
+        }
+        teacherGroupAccessScopeRepository.deleteById(id);
+    }
+
     @Transactional(readOnly = true)
     public PageResponse<TeacherGroupAccessScopeResponse> findTeacherScopesByType(UUID teacherId,
                                                                                   TeacherGroupAccessScopeType scopeType,
@@ -81,6 +96,16 @@ public class TeacherGroupAccessService {
     public TeacherGroupAccessResponse getTeacherScopes(UUID teacherId) {
         ensureTeacherIsValid(teacherId);
         return buildResponse(teacherId, teacherGroupAccessScopeRepository.findAllByTeacher_Id(teacherId));
+    }
+
+    @Transactional(readOnly = true)
+    public List<TeacherGroupAccessScopeDetailsResponse> findTeacherScopesWithDetails(UUID teacherId) {
+        ensureTeacherIsValid(teacherId);
+        return teacherGroupAccessScopeRepository.findAllByTeacher_Id(teacherId).stream()
+                                                .map(this::toScopeDetailsResponse)
+                                                .sorted(Comparator.comparing(TeacherGroupAccessScopeDetailsResponse::scopeType)
+                                                                  .thenComparing(TeacherGroupAccessScopeDetailsResponse::scopeId))
+                                                .toList();
     }
 
     @Transactional
@@ -163,6 +188,26 @@ public class TeacherGroupAccessService {
                 scope.getId().getScopeType(),
                 scope.getId().getScopeId()
         );
+    }
+
+    private TeacherGroupAccessScopeDetailsResponse toScopeDetailsResponse(TeacherGroupAccessScope scope) {
+        TeacherGroupAccessScopeType scopeType = scope.getId().getScopeType();
+        Long scopeId = scope.getId().getScopeId();
+        return new TeacherGroupAccessScopeDetailsResponse(
+                scopeId,
+                scopeType,
+                resolveScopeName(scopeType, scopeId)
+        );
+    }
+
+    private String resolveScopeName(TeacherGroupAccessScopeType scopeType, Long scopeId) {
+        if (scopeType == TeacherGroupAccessScopeType.STUDENT_GROUP) {
+            return studentGroupService.getById(scopeId).name();
+        }
+        if (scopeType == TeacherGroupAccessScopeType.FIELD_OF_STUDY) {
+            return fieldOfStudyService.getById(scopeId).name();
+        }
+        return facultyService.getById(scopeId).name();
     }
 
     public record TeacherScopeIds(Set<Long> groupIds, Set<Long> fieldOfStudyIds, Set<Long> facultyIds) {

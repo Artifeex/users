@@ -31,16 +31,14 @@ public interface StudentGroupRepository extends JpaRepository<StudentGroup, Long
                 OR (:applyField = true AND sg.fieldOfStudy.id IN :fieldIds)
                 OR (:applyFaculty = true AND sg.faculty.id IN :facultyIds)
             )
-            AND (:query IS NULL OR LOWER(sg.name) LIKE LOWER(CONCAT('%', :query, '%')))
             """)
-    Page<StudentGroup> searchAccessibleForTeacher(
+    Page<StudentGroup> findAccessibleForTeacher(
             @Param("groupIds") Collection<Long> groupIds,
             @Param("fieldIds") Collection<Long> fieldIds,
             @Param("facultyIds") Collection<Long> facultyIds,
             @Param("applyGroup") boolean applyGroup,
             @Param("applyField") boolean applyField,
             @Param("applyFaculty") boolean applyFaculty,
-            @Param("query") String query,
             Pageable pageable
     );
 

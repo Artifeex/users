@@ -1,7 +1,6 @@
 package ru.sandr.users.hierarchy.service;
 
 import lombok.RequiredArgsConstructor;
-import org.apache.commons.lang3.StringUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.Authentication;
@@ -32,23 +31,20 @@ public class TeacherStudentGroupSearchService {
     private final StudentGroupMapper studentGroupMapper;
 
     @Transactional(readOnly = true)
-    public Page<StudentGroupResponse> searchAccessibleStudentGroups(String query, Pageable pageable) {
+    public Page<StudentGroupResponse> findAccessibleStudentGroups(Pageable pageable) {
         UUID teacherId = currentTeacherId();
         TeacherGroupAccessService.TeacherScopeIds scopeIds = teacherGroupAccessService.getScopeIds(teacherId);
         if (scopeIds.isEmpty()) {
             return Page.empty(pageable);
         }
 
-        String normalizedQuery = StringUtils.isBlank(query) ? null : query.trim();
-
-        return studentGroupRepository.searchAccessibleForTeacher(
+        return studentGroupRepository.findAccessibleForTeacher(
                 nonEmptyOrFallback(scopeIds.groupIds()),
                 nonEmptyOrFallback(scopeIds.fieldOfStudyIds()),
                 nonEmptyOrFallback(scopeIds.facultyIds()),
                 !scopeIds.groupIds().isEmpty(),
                 !scopeIds.fieldOfStudyIds().isEmpty(),
                 !scopeIds.facultyIds().isEmpty(),
-                normalizedQuery,
                 pageable
         ).map(studentGroupMapper::toResponse);
     }
