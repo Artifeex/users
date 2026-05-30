@@ -38,7 +38,7 @@ import java.util.UUID;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/admin/users")
+@RequestMapping("/us/api/v1/admin/users")
 @Tag(name = "Admin Users")
 @SecurityRequirement(name = "bearerAuth")
 public class AdminController {

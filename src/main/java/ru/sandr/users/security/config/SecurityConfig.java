@@ -61,24 +61,24 @@ public class SecurityConfig {
                    .authorizeHttpRequests(
                            auth ->
                                    auth.requestMatchers(
-                                               "/swagger-ui.html",
-                                               "/swagger-ui/**",
-                                               "/v3/api-docs",
-                                               "/v3/api-docs/**",
+                                               "/us/swagger-ui.html",
+                                               "/us/swagger-ui/**",
+                                               "/us/v3/api-docs",
+                                               "/us/v3/api-docs/**",
                                                "/actuator/health",
                                                "/actuator/prometheus"
                                        )
                                        .permitAll()
-                                       .requestMatchers("/api/v1/auth/**").permitAll()
+                                       .requestMatchers("/us/api/v1/auth/**").permitAll()
                                        .requestMatchers("/error").permitAll()
                                        .requestMatchers("/.well-known/jwks.json").permitAll()
-                                       .requestMatchers(HttpMethod.GET, "/api/v1/hierarchy/**").authenticated()
-                                       .requestMatchers(HttpMethod.POST, "/api/v1/hierarchy/**").hasRole("ADMIN")
-                                       .requestMatchers(HttpMethod.PATCH, "/api/v1/hierarchy/**").hasRole("ADMIN")
-                                       .requestMatchers(HttpMethod.DELETE, "/api/v1/hierarchy/**").hasRole("ADMIN")
-                                       .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
-                                       .requestMatchers("/api/v1/teachers/**").hasRole("TEACHER")
-                                       .requestMatchers("/api/v1/import/**").hasRole("ADMIN")
+                                       .requestMatchers(HttpMethod.GET, "/us/api/v1/hierarchy/**").authenticated()
+                                       .requestMatchers(HttpMethod.POST, "/us/api/v1/hierarchy/**").hasRole("ADMIN")
+                                       .requestMatchers(HttpMethod.PATCH, "/us/api/v1/hierarchy/**").hasRole("ADMIN")
+                                       .requestMatchers(HttpMethod.DELETE, "/us/api/v1/hierarchy/**").hasRole("ADMIN")
+                                       .requestMatchers("/us/api/v1/admin/**").hasRole("ADMIN")
+                                       .requestMatchers("/us/api/v1/teachers/**").hasRole("TEACHER")
+                                       .requestMatchers("/us/api/v1/import/**").hasRole("ADMIN")
                                        .anyRequest().authenticated()
                    ).exceptionHandling(customizer ->
                         customizer.authenticationEntryPoint(filterChainExceptionHandler)

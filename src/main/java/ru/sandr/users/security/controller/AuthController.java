@@ -27,7 +27,7 @@ import ru.sandr.users.security.service.ResetPasswordTokenService;
 import java.time.Duration;
 
 @RestController
-@RequestMapping("/api/v1/auth")
+@RequestMapping("/us/api/v1/auth")
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Auth")
@@ -84,7 +84,7 @@ public class AuthController {
         return ResponseCookie.from("refreshToken", refreshToken)
                              .httpOnly(true)  // JS не имеет доступа, поэтому защищены от XSS атаки, где js скрипт сможет вытащить refresh token из local storage
                              .secure(false)   // true для HTTPS
-                             .path("/api/v1/auth/")       // Cookie будет передаваться только по пути /api/v1/auth/*
+                             .path("/us/api/v1/auth/")       // Cookie будет передаваться только по пути /us/api/v1/auth/*
                              .maxAge(refreshTokenDuration.getSeconds())
                              .sameSite("Strict") // Отправлять только на тот же хост, с которого пришла
                              .build();

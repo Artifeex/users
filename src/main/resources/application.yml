@@ -61,13 +61,14 @@ app:
   import:
     max-errors: 50
 
-# Swagger UI: http://localhost:8080/swagger-ui.html (redirects to /swagger-ui/index.html)
-# OpenAPI JSON: http://localhost:8080/v3/api-docs
+# Swagger UI: http://localhost:8080/us/swagger-ui.html
+# OpenAPI JSON: http://localhost:8080/us/v3/api-docs
 springdoc:
   api-docs:
-    path: /v3/api-docs
+    path: /us/v3/api-docs
   swagger-ui:
-    path: /swagger-ui.html
+    path: /us/swagger-ui.html
+    url: /us/v3/api-docs
 tokens:
   jwt:
     access:

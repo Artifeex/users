@@ -21,7 +21,7 @@ import ru.sandr.users.imports.service.UserImportService;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/import")
+@RequestMapping("/us/api/v1/import")
 @Tag(name = "Imports")
 @SecurityRequirement(name = "bearerAuth")
 public class ImportController {

@@ -31,7 +31,7 @@ import ru.sandr.users.hierarchy.service.FacultyService;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/hierarchy/faculties")
+@RequestMapping("/us/api/v1/hierarchy/faculties")
 @Tag(name = "Hierarchy")
 @SecurityRequirement(name = "bearerAuth")
 public class FacultyController {
