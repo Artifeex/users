@@ -4,6 +4,7 @@ import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.context.ApplicationEventPublisher;
@@ -40,6 +41,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AdminUserService {
 
     private static final int PASSWORD_LENGTH = 12;
@@ -71,6 +73,7 @@ public class AdminUserService {
                                  ));
 
         String tempPassword = PasswordAndTokenGenerator.generate(PASSWORD_LENGTH);
+        log.info("Временный пароль для пользователя {}: {}", request.email(), tempPassword);
         String actor = currentUsername();
         LocalDateTime now = LocalDateTime.now();
 
@@ -109,7 +112,7 @@ public class AdminUserService {
                                 .username(savedUser.getUsername())
                                 .firstName(savedUser.getFirstName())
                                 .lastName(savedUser.getLastName())
-                                .temporaryPassword(savedUser.getPassword())
+                                .temporaryPassword(tempPassword)
                                 .build()
 
         );
