@@ -1,0 +1,28 @@
+server:
+  http_listen_port: 3200
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+ingester:
+  # Как долго Tempo ждёт «тишины» в трейсе, прежде чем сбросить блок в storage (влияет на задержку в Grafana)
+  trace_idle_period: 2s
+  max_block_duration: 30s
+
+compactor:
+  compaction:
+    compacted_block_retention: 48h
+
+storage:
+  trace:
+    backend: local
+    wal:
+      path: /var/tempo/wal
+    local:
+      path: /var/tempo/blocks

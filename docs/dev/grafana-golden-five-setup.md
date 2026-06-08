@@ -44,3 +44,43 @@ Prometheus alert rules are in `ops/prometheus/alerts.yml`:
 - high 5xx ratio
 - low disk space
 - kafka under-replicated partitions
+
+## Logs (Loki + Alloy)
+
+- Loki datasource provisioned in `ops/grafana/provisioning/datasources/datasource.yml`.
+- Alloy config: `ops/alloy/config.alloy` — collects stdout from containers labeled `logging=alloy` (`users-app`, `file-app`).
+- Apps emit ECS JSON logs via Spring Boot structured logging (`logging.structured.format.console: ecs`).
+
+Start logging stack (if not already running):
+
+```bash
+docker compose up -d loki alloy grafana
+```
+
+Rebuild apps after logging config changes:
+
+```bash
+docker compose up -d --build users-app file-app
+```
+
+Explore queries (Grafana → Explore → Loki):
+
+```logql
+{service="users-service"} | json | log_level="ERROR"
+{service="file-service"} | json | log_level="ERROR"
+```
+
+## Traces (Tempo + Alloy)
+
+Подробно: [tracing-guide.md](tracing-guide.md) (детализация spans, задержки, `@Observed`).
+
+```bash
+docker compose up -d tempo alloy grafana
+docker compose up -d --build users-app
+# health почти без БД — для проверки лучше login:
+curl -s -X POST http://localhost:8080/us/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"login":"admin","password":"..."}'
+```
+
+Grafana → Explore → Tempo: `{ resource.service.name = "users-service" }`, Last 5m. Новые трейсы — через ~2–5 с.

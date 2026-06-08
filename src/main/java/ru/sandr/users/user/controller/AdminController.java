@@ -106,7 +106,8 @@ public class AdminController {
                     content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     public List<AdminUserDetailsResponse> getUserDetailsByIds(@Valid @RequestBody AdminUserIdsRequest request) {
-        return adminUserService.getUserDetailsByIds(request.ids());
+        throw new RuntimeException("For dashboard");
+        //return adminUserService.getUserDetailsByIds(request.ids());
     }
 
     @GetMapping

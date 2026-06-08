@@ -1,0 +1,99 @@
+// Discover Docker containers and collect logs only from apps labeled logging=alloy.
+// Т.к. в микросервисной архитектуре сервисы постоянно поднимаются и падают, то у них меняются ip адреса
+// Хардкодить не вариант, поэтому мы можем воспользвоаться патерном Discovery Service и обнаруживать все контейнеры
+// Для этого мы использеум этот блок настроек ниже. В host мы просто указыаем unix сокет, который слушает
+// docker daemon. И Alloy просто будет общаться по этому сокету(по HTTP), чтобы опрашивать docker daemon какие
+// контейнеры подняты на машине, их состояния и ip адреса. Т.е. в discovery.docker.containers.targets - будет хранится
+// Инфа о поднятых контейнерах и мы в других инструентах(сборщик логов, метрик, трейсов) будем ссылаться на них
+discovery.docker "containers" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "5s"
+}
+
+// Нам нужно из всех контейнеров, которые мы получили от docker отфильтровать только нужные нам. Так же переиеновать какие-то лейблы на более удобные названия.
+discovery.relabel "app_containers" {
+  targets = discovery.docker.containers.targets
+// Оставляем тлько те контейнеры, которые имели label logging при старте и это значение строго равно(keep) "alloy".
+// Т.е. контейнеры, которые запущены как docker run --label logging=alloy my-app попадут в выборку.
+  rule {
+    source_labels = ["__meta_docker_container_label_logging"]
+    regex         = "alloy"
+    action        = "keep"
+  }
+
+// Извлекаем значение лейбла service из docker и кладем в новый постоянно service label. По нему в будущем сможем фильтровать логи по сервисам
+  rule {
+    source_labels = ["__meta_docker_container_label_service"]
+    target_label  = "service"
+  }
+
+// Исторически docker именуют имена контейнеров, начиная со "/", например, /my-app?. Мы же хотим избавиться от слэша и сохранить под лейблом container. Это мы и делаем
+// regis берет все, что идет после слэша.
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+// Просто добавляет label "job" со значением "docker" для всех данных, которых будут приходить из alloy для данных targets
+// Это нужно для того, чтоыб различать данные, которые пришли из docker контейнеров от данных, которые пришли из других источинков - kubernets логи. В общем, это просто
+// label для удобства того, чтобы понимать какой источник данных
+  rule {
+    target_label = "job"
+    replacement  = "docker"
+  }
+
+  // Добавляет label "host" со значением из констант constants. В данном случае говорит имя машины, с которой пришли логи. Если у нас множество серверов, то с помощью него
+  // мы можем посмотртеь логи контейнеров с определенного сервера.
+  rule {
+    target_label = "host"
+    replacement  = constants.hostname
+  }
+
+}
+
+loki.source.docker "apps" {
+  host             = "unix:///var/run/docker.sock" // Снова подключаем к unix сокету
+  targets          = discovery.relabel.app_containers.output // Тепер мы работаем не со всеми таргетами с docker, а только теми, что прошли по нашему rules правилу
+  relabel_rules    = discovery.relabel.app_containers.rules // Применяем правила переименования и форматирования лейблов, по которым и будет происходить индексация
+  forward_to       = [loki.write.default.receiver] // Отправлять логи будем по такому компоненту(он идет ниже)
+  refresh_interval = "5s"
+}
+
+// Будем писать наши логи по такому url
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
+
+otelcol.receiver.otlp "default" {
+  grpc {
+    endpoint = "0.0.0.0:4317"
+  }
+  http {
+    endpoint = "0.0.0.0:4318"
+  }
+  output {
+    traces = [otelcol.processor.batch.default.input]
+  }
+}
+
+otelcol.processor.batch "default" {
+  timeout             = "1s"
+  send_batch_size     = 100
+  send_batch_max_size = 200
+  output {
+    traces = [otelcol.exporter.otlp.tempo.input]
+  }
+}
+
+otelcol.exporter.otlp "tempo" {
+  client {
+    endpoint = "tempo:4317"
+    tls {
+      insecure = true
+    }
+  }
+}
+
+

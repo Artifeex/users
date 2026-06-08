@@ -1,6 +1,6 @@
 spring:
   application:
-    name: users
+    name: users-service
 
   servlet:
     multipart:
@@ -25,8 +25,6 @@ spring:
         jdbc:
           batch_size: 100
           order_updates: true # Что делает?
-    show-sql: true
-
   liquibase:
     change-log: classpath:db/changelog/users-changelog-master.yml
     enabled: true
@@ -45,13 +43,34 @@ management:
     prometheus:
       enabled: true
   metrics:
-    tags: 
+    tags:
       application: ${spring.application.name} # Тег для метрик, чтобы группировать метрики по сервису. И в целом тэги плолезны для различных фильтраций и разграничений
     distribution:
       percentiles-histogram:
         http.server.requests: true
       slo:
         http.server.requests: 100ms,250ms,500ms,1s,2s,5s
+  tracing:
+    enabled: true
+    sampling:
+      probability: 1.0 # 1 трейс на каждый HTTP-запрос (кроме случаев, когда span не создаётся)
+    opentelemetry:
+      export:
+        # По умолчанию 5s — spans буферизуются и Grafana «не видит» свежие трейсы сразу после Refresh
+        schedule-delay: 1s
+        timeout: 10s
+  observations:
+    annotations:
+      enabled: true # @Observed на service-классах
+    enable:
+      # Имена из Spring Security ObservationDocumentation (мн. число filterchains!)
+      spring.security.filterchains: false
+      spring.security.secured.requests: false
+      spring.security.authorizations: false
+      spring.security.authentications: false
+  otlp:
+    tracing:
+      endpoint: http://localhost:4318/v1/traces # локально: Alloy на хосте (docker compose port 4318)
 
 app:
   cors:
@@ -90,3 +109,13 @@ router:
   user-topic-name: user-topic
 api:
   file-service-base-url: "http://localhost:8087"
+
+logging:
+  structured:
+    format:
+      console: ecs
+  level:
+    root: INFO
+    ru.sandr: INFO
+    io.micrometer.tracing: DEBUG
+    io.opentelemetry.exporter.internal.http: DEBUG

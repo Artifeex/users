@@ -1,5 +1,6 @@
 package ru.sandr.users.teacheraccess.service;
 
+import io.micrometer.observation.annotation.Observed;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -32,6 +33,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+@Observed(name = "users.teacher-group-access")
 @Service
 @RequiredArgsConstructor
 public class TeacherGroupAccessService {
